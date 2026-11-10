@@ -63,6 +63,7 @@ function orderCard(order) {
       <p class="contact"><a href="tel:+91${digits}">+91 ${digits}</a> <a href="https://wa.me/91${digits}" target="_blank" rel="noopener">WhatsApp</a></p>
       ${order.customer_note ? `<p class="muted">Note: ${esc(order.customer_note)}</p>` : ""}
       ${order.tracking_no ? `<p class="mono small">Tracking: ${esc(order.tracking_no)}${order.courier_name ? ` · ${esc(order.courier_name)}` : ""}${order.shipping_status ? ` · ${esc(order.shipping_status)}` : ""}</p>` : ""}
+      ${order.pickup_location ? `<p class="small muted">Pickup from ${esc(order.pickup_location)}</p>` : ""}
       ${order.shipping_label_url ? `<p class="small"><a class="file" href="${esc(order.shipping_label_url)}" target="_blank" rel="noopener">Download shipping label</a></p>` : ""}
       ${order.cancel_reason ? `<p class="reason-note">${order.status === "cancelled" ? "Customer's reason" : "Declined"}: ${esc(order.cancel_reason)}</p>` : ""}
     </div>
@@ -73,24 +74,35 @@ function orderCard(order) {
 }
 
 function shipWithCourier(orderId, ctx) {
-  openModal(`<h2>Ship this order</h2><div id="ship-body"><p class="muted">Finding couriers...</p></div>`, async (modal, close) => {
+  openModal(`<h2>Ship this order</h2><div id="ship-body"></div>`, (modal, close) => {
     const area = modal.querySelector("#ship-body");
     const showError = (message) => { area.innerHTML = `<p class="error">${esc(message)}</p>`; };
-    let quote;
-    try {
-      quote = await api.shipRates(orderId);
-    } catch (error) {
-      return showError(error.message);
-    }
-    if (!quote.couriers.length) return showError("No courier can deliver to this PIN code right now.");
-    area.innerHTML = `<p class="muted small">Pickup from <strong>${esc(quote.pickup)}</strong>. Courier collects <strong>${quote.collect ? money(quote.collect) : "nothing, already paid"}</strong>. The price is taken from your Shiprocket wallet.</p>
-      <div class="couriers">${quote.couriers.map((c) => `<button class="courier" data-courier="${c.id}" data-name="${esc(c.name)}" data-rate="${c.rate}">
-        <span><strong>${esc(c.name)}</strong>${c.recommended ? ' <em class="rec">Recommended</em>' : ""}<small class="muted">${c.days ? `About ${esc(c.days)} days` : esc(c.etd || "")}${c.rating ? ` · Rated ${esc(c.rating)}` : ""}</small></span><b>${money(c.rate)}</b></button>`).join("")}</div>`;
-    area.querySelectorAll("[data-courier]").forEach((button) => button.addEventListener("click", async () => {
-      if (!confirm(`Book ${button.dataset.name} for ${money(button.dataset.rate)}? This charges your Shiprocket wallet.`)) return;
+    let latest = 0;
+    const load = async (pickupName) => {
+      const request = ++latest;
+      area.innerHTML = '<p class="muted">Finding couriers...</p>';
+      let quote;
+      try {
+        quote = await api.shipRates(orderId, pickupName);
+      } catch (error) {
+        if (request === latest) showError(error.message);
+        return;
+      }
+      if (request !== latest) return;
+      const options = quote.pickups.map((p) => `<option value="${esc(p.name)}" ${p.name === quote.pickup ? "selected" : ""}>${esc(p.name)}${p.city ? `, ${esc(p.city)}` : ""} (${esc(p.pin)})</option>`).join("");
+      area.innerHTML = `<label class="field ship-pickup"><span>Pickup from</span><select id="ship-from" ${quote.locked ? "disabled" : ""}>${options}</select></label>
+        ${quote.locked ? '<p class="muted small">This shipment was already created from this location.</p>' : ""}
+        <p class="muted small">Courier collects <strong>${quote.collect ? money(quote.collect) : "nothing, already paid"}</strong>. The price is taken from your Shiprocket wallet.</p>
+        ${quote.couriers.length ? `<div class="couriers">${quote.couriers.map((c) => `<button class="courier" data-courier="${c.id}" data-name="${esc(c.name)}" data-rate="${c.rate}">
+          <span><strong>${esc(c.name)}</strong>${c.recommended ? ' <em class="rec">Recommended</em>' : ""}<small class="muted">${c.days ? `About ${esc(c.days)} days` : esc(c.etd || "")}${c.rating ? ` · Rated ${esc(c.rating)}` : ""}</small></span><b>${money(c.rate)}</b></button>`).join("")}</div>` : '<p class="error">No courier can deliver from this location to this PIN code right now.</p>'}`;
+      area.querySelector("#ship-from").addEventListener("change", (event) => load(event.target.value));
+      area.querySelectorAll("[data-courier]").forEach((button) => button.addEventListener("click", () => bookCourier(button, quote.pickup)));
+    };
+    const bookCourier = async (button, pickupName) => {
+      if (!confirm(`Book ${button.dataset.name} from ${pickupName} for ${money(button.dataset.rate)}? This charges your Shiprocket wallet.`)) return;
       area.innerHTML = '<p class="muted">Booking the shipment...</p>';
       try {
-        const result = await api.shipBook(orderId, Number(button.dataset.courier));
+        const result = await api.shipBook(orderId, Number(button.dataset.courier), pickupName);
         close();
         toast(`Booked with ${result.courier}. Tracking ${result.awb}`);
         result.warnings.forEach((warning) => toast(warning, "bad"));
@@ -100,7 +112,8 @@ function shipWithCourier(orderId, ctx) {
       } catch (error) {
         showError(error.message);
       }
-    }));
+    };
+    load("");
   });
 }
 
@@ -304,7 +317,7 @@ function drawSettings(body, ctx) {
     </div>
     ${text("delivery_note", "Delivery time, shown to customers", "Example: Delivered in 5 to 7 working days")}
     <h3>Parcel for Shiprocket</h3>
-    ${text("pickup_location", "Shiprocket pickup location name", "Leave blank to use your primary location")}
+    ${text("pickup_location", "Default pickup location name", "Leave blank to use your primary Shiprocket location")}
     <div class="cols">
       <label class="field"><span>Packed weight (kg)</span><input name="parcel_weight_kg" type="number" min="0.01" step="0.01" required value="${s.parcel_weight_kg ?? 0.25}"></label>
       <label class="field"><span>Length (cm)</span><input name="parcel_length_cm" type="number" min="1" step="0.1" required value="${s.parcel_length_cm ?? 30}"></label>

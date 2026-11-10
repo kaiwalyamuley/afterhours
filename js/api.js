@@ -75,11 +75,11 @@ async function liveApi() {
       const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment }));
       return rows[0];
     },
-    async shipRates(orderId) {
-      return callShipping({ action: "rates", order_id: orderId });
+    async shipRates(orderId, pickup) {
+      return callShipping({ action: "rates", order_id: orderId, pickup });
     },
-    async shipBook(orderId, courierId) {
-      return callShipping({ action: "book", order_id: orderId, courier_id: courierId });
+    async shipBook(orderId, courierId, pickup) {
+      return callShipping({ action: "book", order_id: orderId, courier_id: courierId, pickup });
     },
     async submitPaymentRef(orderId, ref) {
       unwrap(await db.rpc("submit_payment_ref", { p_order_id: orderId, p_ref: ref }));
