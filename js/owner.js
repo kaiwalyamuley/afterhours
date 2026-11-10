@@ -326,6 +326,9 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Breadth (cm)</span><input name="parcel_breadth_cm" type="number" min="1" step="0.1" required value="${s.parcel_breadth_cm ?? 25}"></label>
       <label class="field"><span>Height (cm)</span><input name="parcel_height_cm" type="number" min="1" step="0.1" required value="${s.parcel_height_cm ?? 3}"></label>
     </div>
+    ${ctx.store.profile.access.owner ? `<h3>Telegram order alerts</h3>
+    <p class="muted small">Get a message for new orders, UPI payments and customer messages. Send your bot a message first, then connect.</p>
+    <button type="button" class="btn small" id="connect-alerts">Connect and send a test alert</button>` : ""}
     <h3>Payments</h3>
     <p class="muted small">Add a UPI ID to offer full and advance UPI payment. Customers will see it, so avoid an ID that contains your personal mobile number.</p>
     <div class="cols">${text("upi_id", "UPI ID", "yourbrand@okaxis")}${text("upi_payee", "Name shown in UPI apps", "AfterHours")}</div>
@@ -345,6 +348,17 @@ function drawSettings(body, ctx) {
     <label class="field"><span>Return and exchange policy</span><textarea name="return_policy" rows="4" maxlength="1200" placeholder="Example: Damaged or wrongly printed tees are replaced if you contact us within 3 days of delivery.">${esc(s.return_policy || "")}</textarea></label>
     <p class="error" id="settings-error" hidden></p>
     <button class="btn primary wide">Save store info</button></form>`;
+  body.querySelector("#connect-alerts")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const result = await api.connectAlerts();
+      toast(`Connected to ${result.chat}. Check Telegram for a test alert.`);
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+    button.disabled = false;
+  });
   body.querySelector("#settings").addEventListener("submit", async (event) => {
     event.preventDefault();
     const { upi_qr_file: qrFile, remove_upi_qr: removeQr, ...data } = Object.fromEntries(new FormData(event.target));

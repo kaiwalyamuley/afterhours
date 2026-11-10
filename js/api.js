@@ -75,6 +75,12 @@ async function liveApi() {
       const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment }));
       return rows[0];
     },
+    async connectAlerts() {
+      const { data, error } = await db.functions.invoke("notify-owner", { body: { kind: "connect" } });
+      if (!error) return data;
+      const details = await error.context?.json?.().catch(() => null);
+      throw new Error(details?.error || "Could not reach the alert service. Please try again.");
+    },
     async shipRates(orderId, pickup) {
       return callShipping({ action: "rates", order_id: orderId, pickup });
     },
