@@ -272,7 +272,7 @@ function drawSettings(body, ctx) {
     <h3>Payments</h3>
     <p class="muted small">Add a UPI ID to offer full and advance UPI payment. Customers will see it, so avoid an ID that contains your personal mobile number.</p>
     <div class="cols">${text("upi_id", "UPI ID", "yourbrand@okaxis")}${text("upi_payee", "Name shown in UPI apps", "AfterHours")}</div>
-    <label class="field"><span>Your UPI QR image (recommended). Use the QR from your UPI or bank app.</span><input type="file" name="upi_qr_file" accept="image/png,image/jpeg,image/webp"></label>
+    <label class="field"><span>Your UPI QR image (recommended). Use the QR from your UPI or bank app. Without it, customers pay using your UPI ID.</span><input type="file" name="upi_qr_file" accept="image/png,image/jpeg,image/webp"></label>
     ${s.upi_qr_url ? `<div class="qr-current"><div class="qr"><img src="${esc(s.upi_qr_url)}" alt="Current UPI QR code"></div><label class="check"><input type="checkbox" name="remove_upi_qr"><span><strong>Remove this QR image</strong></span></label></div>` : ""}
     <div class="cols">
       <label class="field"><span>Advance amount (₹)</span><input name="advance_inr" type="number" min="1" step="1" required value="${s.advance_inr ?? 99}"></label>
