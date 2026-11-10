@@ -1,11 +1,14 @@
 import { api, DEMO } from "./api.js";
 import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART } from "./ui.js";
-import { pageSwap, reveal, bindTilt, flyToBag, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
+import { calm, pageSwap, reveal, bindTilt, flyToBag, autoScroll, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
 import { mountSide, drawSide, sideToggle } from "./side.js";
 import { CUSTOMER_REASONS, SUPPORT_TOPICS } from "./reasons.js";
 
 const app = document.getElementById("app");
-const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, activeOrders: 0 };
+const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, activeOrders: 0, reviews: [] };
+const reviewsFor = (productId) => store.reviews.filter((r) => r.product_id === productId);
+const averageRating = (list) => (list.reduce((sum, r) => sum + r.rating, 0) / list.length).toFixed(1);
+const starRow = (rating) => `<span class="stars" role="img" aria-label="${rating} out of 5 stars">${"★".repeat(rating)}<i>${"★".repeat(5 - rating)}</i></span>`;
 const INDIAN_MOBILE = /^[6-9][0-9]{9}$/;
 
 /* ---------- bag ---------- */
@@ -161,6 +164,7 @@ function card(p) {
     <div class="card-info">
       <h3>${esc(p.name)}</h3>
       <p class="muted">${esc(p.tagline)}</p>
+      ${reviewsFor(p.id).length ? `<p class="card-rating"><b>★</b> ${averageRating(reviewsFor(p.id))} <span class="muted">(${reviewsFor(p.id).length})</span></p>` : ""}
       <p class="price">${money(p.price_inr)}${off ? ` <s>${money(p.compare_at_inr)}</s> <em>${off}% off</em>` : ""}</p>
     </div>
   </a>`;
@@ -253,6 +257,7 @@ async function pageHome() {
     ${pre.length ? `<section class="section"><div class="head"><span class="mono kicker">Pre-Launch</span><h2>Early-access graphics.</h2><a class="more" href="#/shop">See all</a></div>${grid(pre)}</section>` : ""}
     ${lookbook()}${pricing()}${howItWorks()}`;
   document.getElementById("hero-signin")?.addEventListener("click", () => signInModal());
+  autoScroll(app.querySelector(".lookbook"));
   const strip = await activeOrderStrip().catch(() => "");
   const slot = document.getElementById("strip");
   if (slot) slot.innerHTML = strip;
@@ -273,18 +278,23 @@ function pageShop(filter = "All") {
 function pageProduct(slug) {
   const p = visible().find((x) => x.slug === slug);
   if (!p) return notFound();
-  const views = [["back", "Back"], ["front", "Front"]];
-  if (p.model_image) views.push(["model", "On model"]);
+  const slides = [{ side: "back", label: "Back" }, { side: "front", label: "Front" }];
+  if (p.model_image) slides.push({ src: p.model_image, label: "On model" });
+  (p.gallery || []).forEach((src, i) => slides.push({ src, label: `Photo ${i + 1}` }));
+  const slideView = (s) => (s.src ? `<img class="model" src="${esc(s.src)}" alt="${esc(p.name)}: ${esc(s.label)}">` : tee(p, s.side, true));
+  const thumbView = (s) => (s.src ? `<img src="${esc(s.src)}" alt="" loading="lazy">` : tee(p, s.side));
+  const reviews = reviewsFor(p.id);
   const live = p.status === "live";
   app.innerHTML = `<section class="section first pdp">
     <div class="gallery">
-      <div class="stage" id="stage">${tee(p, "back")}</div>
-      <div class="chips">${views.map(([v, l], i) => `<button class="chip ${i ? "" : "on"}" data-v="${v}">${l}</button>`).join("")}</div>
+      <div class="stage" id="stage">${slideView(slides[0])}</div>
+      <div class="thumbs" id="thumbs">${slides.map((s, i) => `<button class="thumb-btn ${i ? "" : "on"}" data-slide="${i}" aria-label="Show ${esc(s.label)}" title="${esc(s.label)}">${thumbView(s)}</button>`).join("")}</div>
     </div>
     <div class="buy">
       <span class="mono kicker">${esc(p.collection)}</span>
       <h1>${esc(p.name)}</h1>
       <p class="lead">${esc(p.tagline)}</p>
+      ${reviews.length ? `<a class="rating-link" href="#reviews-section" id="rating-link">${starRow(Math.round(averageRating(reviews)))} ${averageRating(reviews)} (${reviews.length} review${reviews.length === 1 ? "" : "s"})</a>` : ""}
       <p class="price big">${money(p.price_inr)}${p.compare_at_inr > p.price_inr ? ` <s>${money(p.compare_at_inr)}</s>` : ""}</p>
       <p class="muted">${esc(p.description)}</p>
       ${live ? `<div class="size-head"><span class="mono label">Size</span><button type="button" class="size-guide" id="size-guide">Size guide</button></div>
@@ -298,15 +308,46 @@ function pageProduct(slug) {
         <li>Questions? <a href="#/help">Contact us</a></li>
       </ul>
     </div>
+  </section>
+  <section class="section reviews" id="reviews-section">
+    <div class="head"><span class="mono kicker">From verified buyers</span><h2>Reviews</h2></div>
+    ${reviews.length ? `<p class="review-score">${starRow(Math.round(averageRating(reviews)))} <strong>${averageRating(reviews)}</strong> <span class="muted">from ${reviews.length} delivered order${reviews.length === 1 ? "" : "s"}</span></p>
+    <div class="review-list">${reviews.slice(0, 20).map((r) => `<article class="panel review">${starRow(r.rating)}${r.comment ? `<p>${esc(r.comment)}</p>` : ""}<p class="muted small">${esc(r.reviewer_name)} · Verified buyer · ${new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p></article>`).join("")}</div>`
+    : '<p class="muted">No reviews yet. Customers can leave a review from their orders page after delivery.</p>'}
   </section>`;
   const stage = document.getElementById("stage");
-  app.querySelectorAll("[data-v]").forEach((b) => b.addEventListener("click", () => {
-    app.querySelectorAll("[data-v]").forEach((x) => x.classList.toggle("on", x === b));
-    stage.innerHTML = b.dataset.v === "model"
-      ? `<img class="model" src="${esc(p.model_image)}" alt="${esc(p.name)} worn by a model">`
-      : tee(p, b.dataset.v, true);
+  const thumbs = document.getElementById("thumbs");
+  let current = 0;
+  let holdUntil = 0;
+  const showSlide = (index) => {
+    current = index;
+    stage.innerHTML = slideView(slides[index]);
     stage.firstElementChild.classList.add("swap-in");
+    thumbs.querySelectorAll("[data-slide]").forEach((b, i) => {
+      b.classList.toggle("on", i === index);
+      if (i === index) thumbs.scrollTo({ left: b.offsetLeft - (thumbs.clientWidth - b.offsetWidth) / 2, behavior: calm ? "auto" : "smooth" });
+    });
+  };
+  thumbs.querySelectorAll("[data-slide]").forEach((b) => b.addEventListener("click", () => {
+    holdUntil = Date.now() + 10000;
+    showSlide(Number(b.dataset.slide));
   }));
+  document.getElementById("rating-link")?.addEventListener("click", (event) => {
+    event.preventDefault();
+    document.getElementById("reviews-section").scrollIntoView({ behavior: calm ? "auto" : "smooth" });
+  });
+  if (!calm && slides.length > 1) {
+    const gallery = app.querySelector(".gallery");
+    let hovering = false;
+    gallery.addEventListener("pointerenter", (event) => { if (event.pointerType === "mouse") hovering = true; });
+    gallery.addEventListener("pointerleave", () => { hovering = false; });
+    gallery.addEventListener("touchstart", () => { holdUntil = Date.now() + 8000; }, { passive: true });
+    const timer = setInterval(() => {
+      if (!stage.isConnected) return clearInterval(timer);
+      if (document.hidden || hovering || Date.now() < holdUntil) return;
+      showSlide((current + 1) % slides.length);
+    }, 3500);
+  }
   let size = p.sizes[1] || p.sizes[0];
   app.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => {
     size = b.dataset.s;
@@ -537,11 +578,48 @@ function timeline(status) {
   return `<ol class="track">${["Placed", "Accepted", "Printing", "Dispatched", "Delivered"].map((label, i) => `<li class="${i <= step ? "done" : ""}">${label}</li>`).join("")}</ol>`;
 }
 
+function reviewForm(productId, name, existing) {
+  let rating = existing?.rating || 0;
+  openModal(`<h2>Rate ${esc(name)}</h2>
+    <form id="review-form" class="form">
+      <div class="star-pick" role="group" aria-label="Your rating">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-star="${n}" aria-label="${n} star${n === 1 ? "" : "s"}">★</button>`).join("")}</div>
+      <label class="field"><span>Your review (optional)</span><textarea name="comment" rows="3" maxlength="500">${esc(existing?.comment || "")}</textarea></label>
+      <p class="muted small">Shown publicly with your first name.</p>
+      <p class="error" id="review-error" hidden></p>
+      <button class="btn primary wide" id="review-send">Post review</button>
+    </form>`, (modal, close) => {
+    const buttons = [...modal.querySelectorAll("[data-star]")];
+    const paint = () => buttons.forEach((b) => b.classList.toggle("on", Number(b.dataset.star) <= rating));
+    paint();
+    buttons.forEach((b) => b.addEventListener("click", () => { rating = Number(b.dataset.star); paint(); }));
+    modal.querySelector("#review-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const box = modal.querySelector("#review-error");
+      const send = modal.querySelector("#review-send");
+      box.hidden = true;
+      if (!rating) { box.textContent = "Please choose a star rating."; box.hidden = false; return; }
+      send.disabled = true;
+      try {
+        await api.submitReview(productId, rating, event.target.elements.comment.value.trim());
+        store.reviews = await api.reviews();
+        close();
+        toast("Thanks for your review");
+        pageOrders();
+      } catch (error) {
+        box.textContent = error.message;
+        box.hidden = false;
+        send.disabled = false;
+      }
+    });
+  });
+}
+
 async function pageOrders() {
   if (!store.profile) return needSignIn("Sign in to see your orders.");
   const openedAt = location.hash;
-  const orders = await api.myOrders(store.profile.id);
+  const [orders, myReviews] = await Promise.all([api.myOrders(store.profile.id), api.myReviews().catch(() => [])]);
   if (location.hash !== openedAt) return;
+  const mine = new Map(myReviews.map((r) => [r.product_id, r]));
   if (!orders.length) {
     app.innerHTML = `<section class="section first empty"><h2>No orders yet.</h2><a class="btn primary" href="#/shop">Browse the drop</a></section>`;
     return;
@@ -550,7 +628,8 @@ async function pageOrders() {
     <div class="stack">${orders.map((o) => `<article class="panel order">
       <header class="row-between"><div><span class="mono">${esc(o.order_no)}</span><p class="muted small">${when(o.created_at)}</p></div><span class="status ${o.status}">${STATUS[o.status].label}</span></header>
       ${timeline(o.status)}
-      ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>`).join("")}
+      ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
+        ${o.status === "delivered" && i.product_id ? `<button class="btn small" data-review="${esc(i.product_id)}" data-name="${esc(i.name)}">${mine.has(i.product_id) ? `Edit your review (${mine.get(i.product_id).rating}★)` : "Write a review"}</button>` : ""}`).join("")}
       <p class="row-between total"><span>Total</span><strong>${money(o.total_inr)}</strong></p>
       <div class="pay-line"><span class="pay-state ${esc(o.payment_status)}">${PAYMENT[o.payment_status]}</span>
         ${o.amount_due_now ? `<span class="muted small">UPI ${money(o.amount_due_now)}${paidLater(o) && !["rejected", "cancelled"].includes(o.status) ? `, then ${money(paidLater(o))} at delivery` : ""}</span>` : ""}
@@ -562,6 +641,7 @@ async function pageOrders() {
       ${o.status === "pending" && ["submitted", "verified"].includes(o.payment_status) ? `<p class="muted small">Need to cancel a paid order? <a class="inline-link" href="#/help">Contact us</a></p>` : ""}
     </article>`).join("")}</div></section>`;
   reveal(app);
+  app.querySelectorAll("[data-review]").forEach((b) => b.addEventListener("click", () => reviewForm(b.dataset.review, b.dataset.name, mine.get(b.dataset.review))));
   app.querySelectorAll("[data-cancel]").forEach((b) => b.addEventListener("click", async () => {
     const reason = await pickReason("Why are you cancelling?", "Tap a reason and your order will be cancelled.", CUSTOMER_REASONS);
     if (!reason) return;
@@ -682,7 +762,7 @@ async function updateActiveOrders() {
 }
 
 async function refresh() {
-  [store.products, store.settings] = await Promise.all([api.products(), api.settings()]);
+  [store.products, store.settings, store.reviews] = await Promise.all([api.products(), api.settings(), api.reviews().catch(() => [])]);
 }
 
 function welcome() {

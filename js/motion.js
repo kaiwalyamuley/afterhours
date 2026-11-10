@@ -5,7 +5,7 @@ export const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* ---------- scroll reveal ---------- */
-const REVEAL = ".head, .card, .tier, .steps li, .line, .panel, .stat, .prow, .lookbook img, .chips, .tabs";
+const REVEAL = ".head, .card, .tier, .steps li, .line, .panel, .stat, .prow, .chips, .tabs";
 let observer;
 
 export function reveal(root) {
@@ -24,6 +24,41 @@ export function reveal(root) {
     el.style.setProperty("--d", `${Math.min(index, 7) * 65}ms`);
     observer.observe(el);
   });
+}
+
+/* ---------- endless sideways scroll ---------- */
+export function autoScroll(el, pixelsPerSecond = 34) {
+  if (calm || !el || el.children.length < 2) return;
+  const originals = [...el.children];
+  originals.forEach((child) => {
+    const copy = child.cloneNode(true);
+    copy.alt = "";
+    copy.setAttribute("aria-hidden", "true");
+    el.append(copy);
+  });
+  el.style.scrollSnapType = "none";
+  let position = 0;
+  let held = false;
+  const hold = () => { held = true; };
+  const release = () => { held = false; position = el.scrollLeft; };
+  el.addEventListener("pointerenter", hold);
+  el.addEventListener("pointerleave", release);
+  el.addEventListener("touchstart", hold, { passive: true });
+  el.addEventListener("touchend", release, { passive: true });
+  let previous = performance.now();
+  const step = (now) => {
+    if (!el.isConnected) return;
+    const elapsed = Math.min(now - previous, 250);
+    previous = now;
+    if (!held && !document.hidden) {
+      const loop = el.children[originals.length].offsetLeft - originals[0].offsetLeft;
+      position += (pixelsPerSecond * elapsed) / 1000;
+      if (loop > 0 && position >= loop) position -= loop;
+      el.scrollLeft = position;
+    }
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 
 /* ---------- page change ---------- */

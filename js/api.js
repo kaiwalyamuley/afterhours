@@ -75,6 +75,21 @@ async function liveApi() {
       const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment }));
       return rows[0];
     },
+    async reviews() {
+      return unwrap(await db.from("product_reviews").select("id,product_id,rating,comment,reviewer_name,created_at").eq("status", "published").order("created_at", { ascending: false }).limit(1000));
+    },
+    async staffReviews() {
+      return unwrap(await db.from("product_reviews").select("id,product_id,rating,comment,reviewer_name,status,created_at").order("created_at", { ascending: false }).limit(300));
+    },
+    async setReviewStatus(id, status) {
+      unwrap(await db.from("product_reviews").update({ status }).eq("id", id));
+    },
+    async submitReview(productId, rating, comment) {
+      unwrap(await db.rpc("submit_review", { p_product_id: productId, p_rating: rating, p_comment: comment }));
+    },
+    async myReviews() {
+      return unwrap(await db.rpc("my_reviews"));
+    },
     async connectAlerts() {
       const { data, error } = await db.functions.invoke("notify-owner", { body: { kind: "connect" } });
       if (!error) return data;

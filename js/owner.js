@@ -212,9 +212,32 @@ function productForm(product, ctx) {
       ${upload("back", "Back graphic (transparent PNG works best)", p.print_back)}
       ${upload("front", "Front graphic", p.print_front)}
       ${upload("model", "Model photo", p.model_image)}
+      <div class="field"><span>Product photos (up to 12)</span>
+        <div class="gallery-edit" id="gallery-edit"></div>
+        <input type="file" id="gallery-files" name="gallery_files" multiple accept="image/png,image/jpeg,image/webp">
+        <small class="muted" id="gallery-count"></small>
+      </div>
       <p class="error" id="product-error" hidden></p>
       <button class="btn primary wide" id="save">Save product</button>
     </form>`, (modal, close) => {
+    let kept = [...(p.gallery || [])];
+    const filesInput = modal.querySelector("#gallery-files");
+    const newCount = () => filesInput.files.length;
+    const updateCount = () => {
+      const total = kept.length + newCount();
+      modal.querySelector("#gallery-count").textContent = `${total} of 12 photos${total > 12 ? ". Please remove some." : ""}`;
+    };
+    const drawGallery = () => {
+      const area = modal.querySelector("#gallery-edit");
+      area.innerHTML = kept.map((src, i) => `<div class="gallery-thumb"><img src="${esc(src)}" alt="Product photo ${i + 1}"><button type="button" aria-label="Remove photo ${i + 1}" data-remove="${i}">×</button></div>`).join("");
+      area.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => {
+        kept.splice(Number(b.dataset.remove), 1);
+        drawGallery();
+      }));
+      updateCount();
+    };
+    drawGallery();
+    filesInput.addEventListener("change", updateCount);
     modal.querySelector("#product").addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = new FormData(event.target);
@@ -226,6 +249,8 @@ function productForm(product, ctx) {
       const fail = (message) => { errorBox.textContent = message; errorBox.hidden = false; };
       if (!Number.isInteger(price) || price < 1) return fail("Price must be a whole number of rupees.");
       if (!sizes.length) return fail("Add at least one size.");
+      const galleryFiles = [...filesInput.files];
+      if (kept.length + galleryFiles.length > 12) return fail("You can add up to 12 product photos.");
       if (!product && !data.get("back").size) return fail("A new product needs a back graphic.");
       button.disabled = true;
       button.textContent = "Saving";
@@ -246,6 +271,13 @@ function productForm(product, ctx) {
           }
         }
         if (data.get("model").size) values.model_image = await api.upload(data.get("model"), slug);
+        const uploaded = [];
+        for (const [index, file] of galleryFiles.entries()) {
+          button.textContent = `Uploading photo ${index + 1} of ${galleryFiles.length}`;
+          uploaded.push(await api.upload(file, slug));
+        }
+        values.gallery = [...kept, ...uploaded];
+        button.textContent = "Saving";
         await api.saveProduct(values);
         close();
         toast("Product saved");
@@ -518,10 +550,32 @@ async function drawHelpDesk(body, ctx) {
   }));
 }
 
+async function drawReviews(body, ctx) {
+  const reviews = await api.staffReviews();
+  const nameOf = (id) => ctx.store.products.find((p) => p.id === id)?.name || "Deleted product";
+  body.innerHTML = `<div class="orders">${reviews.map((r) => `<article class="panel order">
+    <header class="row-between"><div><strong>${esc(nameOf(r.product_id))}</strong><p class="muted small">${esc(r.reviewer_name)} · ${when(r.created_at)}</p></div>
+    <span class="status ${r.status === "published" ? "delivered" : "rejected"}">${r.status === "published" ? "Published" : "Hidden"}</span></header>
+    <p class="review-stars">${"★".repeat(r.rating)}<span>${"★".repeat(5 - r.rating)}</span></p>
+    ${r.comment ? `<p class="message-text">${esc(r.comment)}</p>` : ""}
+    <div class="row"><button class="btn small" data-review-id="${esc(r.id)}" data-next="${r.status === "published" ? "hidden" : "published"}">${r.status === "published" ? "Hide" : "Show again"}</button></div>
+  </article>`).join("") || '<p class="muted">No reviews yet. Customers can review a tee after it is delivered.</p>'}</div>`;
+  body.querySelectorAll("[data-review-id]").forEach((button) => button.addEventListener("click", async () => {
+    try {
+      await api.setReviewStatus(button.dataset.reviewId, button.dataset.next);
+      toast("Review updated");
+      await drawReviews(body, ctx);
+    } catch (error) {
+      toast(error.message, "bad");
+    }
+  }));
+}
+
 export const consoleTabs = (access) => [
   ["orders", "Orders", access.orders, "orders"],
   ["products", "Products", access.products, "tag"],
   ["help", "Help desk", access.orders, "chat"],
+  ["reviews", "Reviews", access.products, "star"],
   ["settings", "Store info", access.settings, "settings"],
   ["team", "Team", access.owner, "team"],
 ].filter(([, , allowed]) => allowed);
@@ -545,5 +599,6 @@ export async function renderOwner(app, tab, ctx) {
   else if (active === "settings") drawSettings(body, ctx);
   else if (active === "team") await drawTeam(body, ctx);
   else if (active === "help") await drawHelpDesk(body, ctx);
+  else if (active === "reviews") await drawReviews(body, ctx);
   else drawOrders(body, orders, ctx);
 }
