@@ -1,9 +1,8 @@
 import { api } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
 import { drawAnalytics, drawMargin, attachPriceHelp } from "./analytics.js";
 import { drawMembers } from "./members.js";
-import { countUp } from "./motion.js";
 
 export async function pendingCount() {
   const orders = await api.allOrders();
@@ -55,8 +54,9 @@ function orderCard(order) {
       <span class="status ${order.status}">${STATUS[order.status].label}</span>
     </header>
     ${order.order_items.map((item) => `<div class="line slim">
-      <div class="thumb">${tee(item, "back")}</div>
+      <div class="thumb">${tee(item, "back", false, item.color_hex)}</div>
       <div class="grow"><h3>${esc(item.name)}</h3><p class="mono muted">Size ${esc(item.size)} × ${item.quantity}</p>
+        ${colorTag(item.color_name, item.color_hex, true)}
         <div class="files">${fileLink(item.print_file_back, "Back print")}${fileLink(item.print_file_front, "Front print")}</div></div>
       <span>${money(item.unit_price_inr * item.quantity)}</span>
     </div>`).join("")}
@@ -181,21 +181,11 @@ function drawOrders(body, orders, ctx) {
   }));
 }
 
-function stats(orders) {
-  const counted = orders.filter((o) => !["rejected", "cancelled"].includes(o.status));
-  const tiles = [
-    ["Waiting", orders.filter((o) => o.status === "pending").length],
-    ["In production", orders.filter((o) => ["accepted", "printing"].includes(o.status)).length],
-    ["Orders", counted.length],
-    ["Order value", counted.reduce((sum, o) => sum + o.total_inr, 0), true],
-  ];
-  return `<div class="stats">${tiles.map(([label, value, isMoney]) => `<div class="stat"><span class="mono muted">${label}</span><strong data-n="${value}" ${isMoney ? 'data-money="1"' : ""}>${isMoney ? money(value) : value}</strong></div>`).join("")}</div>`;
-}
-
+const COLOR_HEX = /^#[0-9A-Fa-f]{6}$/;
 const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 function productForm(product, ctx) {
-  const p = product || { name: "", tagline: "", description: "", collection: "Drop 01", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live" };
+  const p = product || { name: "", tagline: "", description: "", collection: "Drop 01", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live", gender: "unisex", colors: [{ name: "Black", hex: "#000000" }] };
   const upload = (name, label, current) => `<label class="field"><span>${label}${current ? " (replace)" : ""}</span><input type="file" name="${name}" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label>`;
   openModal(`<h2>${product ? "Edit product" : "New product"}</h2>
     <form id="product" class="form">
@@ -214,10 +204,18 @@ function productForm(product, ctx) {
           ${[["live", "Live"], ["coming_soon", "Coming soon"], ["hidden", "Hidden"]].map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}
         </select></label>
       </div>
-      <label class="field"><span>Sizes, separated by commas</span><input name="sizes" required value="${esc(p.sizes.join(", "))}"></label>
+      <div class="cols">
+        <label class="field"><span>For</span><select name="gender">
+          ${[["unisex", "Both"], ["male", "Male"], ["female", "Female"]].map(([v, l]) => `<option value="${v}" ${(p.gender || "unisex") === v ? "selected" : ""}>${l}</option>`).join("")}
+        </select></label>
+        <label class="field"><span>Sizes, separated by commas</span><input name="sizes" required value="${esc(p.sizes.join(", "))}"></label>
+      </div>
+      <div class="field"><span>Tee colours, with exact hex codes</span>
+        <div class="color-list" id="color-list"></div>
+        <button type="button" class="btn small" id="add-color">Add colour</button>
+      </div>
       ${upload("back", "Back graphic (transparent PNG works best)", p.print_back)}
       ${upload("front", "Front graphic", p.print_front)}
-      ${upload("model", "Model photo", p.model_image)}
       <div class="field"><span>Product photos (up to 12)</span>
         <div class="gallery-edit" id="gallery-edit"></div>
         <input type="file" id="gallery-files" name="gallery_files" multiple accept="image/png,image/jpeg,image/webp">
@@ -226,7 +224,28 @@ function productForm(product, ctx) {
       <p class="error" id="product-error" hidden></p>
       <button class="btn primary wide" id="save">Save product</button>
     </form>`, (modal, close) => {
-    let kept = [...(p.gallery || [])];
+    let kept = [...new Set([p.model_image, ...(p.gallery || [])].filter(Boolean))];
+    const colorList = modal.querySelector("#color-list");
+    const addColor = (color = { name: "", hex: "#FFFFFF" }) => {
+      const row = document.createElement("div");
+      row.className = "color-row";
+      row.innerHTML = `<input type="color" aria-label="Pick a colour" value="${esc(color.hex.toLowerCase())}">
+        <input class="color-hex" maxlength="7" aria-label="Hex code" placeholder="#000000" value="${esc(color.hex.toUpperCase())}">
+        <input class="color-name" maxlength="24" aria-label="Colour name" placeholder="Colour name" value="${esc(color.name)}">
+        <button type="button" aria-label="Remove colour">×</button>`;
+      const [picker, hex] = row.querySelectorAll("input");
+      picker.addEventListener("input", () => { hex.value = picker.value.toUpperCase(); });
+      hex.addEventListener("input", () => { if (COLOR_HEX.test(hex.value)) picker.value = hex.value.toLowerCase(); });
+      row.querySelector("button").addEventListener("click", () => row.remove());
+      colorList.append(row);
+    };
+    (p.colors || []).forEach(addColor);
+    modal.querySelector("#add-color").addEventListener("click", () => {
+      if (colorList.children.length >= 12) return toast("You can add up to 12 colours", "bad");
+      addColor();
+      colorList.lastElementChild.querySelector(".color-name").focus();
+    });
+    const readColors = () => [...colorList.children].map((row) => ({ name: row.querySelector(".color-name").value.trim(), hex: row.querySelector(".color-hex").value.trim().toUpperCase() }));
     const filesInput = modal.querySelector("#gallery-files");
     const newCount = () => filesInput.files.length;
     const updateCount = () => {
@@ -256,6 +275,10 @@ function productForm(product, ctx) {
       const fail = (message) => { errorBox.textContent = message; errorBox.hidden = false; };
       if (!Number.isInteger(price) || price < 1) return fail("Price must be a whole number of rupees.");
       if (!sizes.length) return fail("Add at least one size.");
+      const colors = readColors();
+      if (colors.some((c) => !c.name)) return fail("Give every colour a name.");
+      if (colors.some((c) => !COLOR_HEX.test(c.hex))) return fail("Each colour needs a hex code like #1B2A4A.");
+      if (new Set(colors.map((c) => c.hex)).size !== colors.length) return fail("Each colour needs a different hex code.");
       const galleryFiles = [...filesInput.files];
       if (kept.length + galleryFiles.length > 12) return fail("You can add up to 12 product photos.");
       if (!product && !data.get("back").size) return fail("A new product needs a back graphic.");
@@ -265,7 +288,7 @@ function productForm(product, ctx) {
         const slug = p.slug || `${slugify(String(data.get("name")))}-${Date.now().toString(36)}`;
         const values = {
           name: String(data.get("name")).trim(), tagline: String(data.get("tagline")).trim(), description: String(data.get("description")).trim(),
-          collection: String(data.get("collection")).trim(), price_inr: price, compare_at_inr: compare, status: data.get("status"), sizes, slug,
+          collection: String(data.get("collection")).trim(), price_inr: price, compare_at_inr: compare, status: data.get("status"), sizes, slug, gender: data.get("gender"), colors,
         };
         if (product) values.id = product.id;
         else values.sort = Math.max(0, ...ctx.store.products.map((x) => x.sort)) + 10;
@@ -277,13 +300,13 @@ function productForm(product, ctx) {
             values[`print_file_${side}`] = url;
           }
         }
-        if (data.get("model").size) values.model_image = await api.upload(data.get("model"), slug);
         const uploaded = [];
         for (const [index, file] of galleryFiles.entries()) {
           button.textContent = `Uploading photo ${index + 1} of ${galleryFiles.length}`;
           uploaded.push(await api.upload(file, slug));
         }
         values.gallery = [...kept, ...uploaded];
+        values.model_image = null;
         button.textContent = "Saving";
         const savedId = await api.saveProduct(values);
         const productCost = (await readProductCost)();
@@ -305,7 +328,7 @@ function drawProducts(body, ctx) {
   const { products } = ctx.store;
   body.innerHTML = `<div class="row-between toolbar"><p class="muted">${products.length} products. Prices save as soon as you leave the box.</p><button class="btn small primary" id="new">Add product</button></div>
   <div class="ptable">${products.map((p) => `<div class="prow" data-id="${esc(p.id)}">
-    <div class="thumb">${tee(p, "back")}</div>
+    <div class="thumb">${tee(p, "back", false, p.colors?.[0]?.hex)}</div>
     <div class="grow"><h3>${esc(p.name)}</h3><p class="mono muted">${esc(p.collection)}</p></div>
     <label class="inline"><span class="sr">Price of ${esc(p.name)}</span>₹<input class="price-input" type="number" min="1" step="1" value="${p.price_inr}"></label>
     <select class="status-input" aria-label="Visibility of ${esc(p.name)}">${[["live", "Live"], ["coming_soon", "Coming soon"], ["hidden", "Hidden"]].map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}</select>
@@ -646,7 +669,7 @@ async function drawCoupons(body) {
 
 export const consoleTabs = (access) => [
   ["orders", "Orders", access.orders, "orders"],
-  ["products", "Products", access.products, "tag"],
+  ["products", "Products", access.products, "shop"],
   ["help", "Help desk", access.orders, "chat"],
   ["reviews", "Reviews", access.products, "star"],
   ["coupons", "Coupons", access.products, "tag"],
@@ -665,12 +688,9 @@ export async function renderOwner(app, tab, ctx) {
   const orders = access.orders ? await api.allOrders() : [];
   if (location.hash !== openedAt) return;
   app.innerHTML = `<section class="section first">
-    <div class="head"><span class="mono kicker">${access.owner ? "Owner console" : "Co-owner console"}</span><h2>Run the shop</h2></div>
-    ${access.orders ? stats(orders) : ""}
-    <div class="tabs">${tabs.map(([key, label]) => `<a class="${key === active ? "on" : ""}" href="#/${key}">${label}</a>`).join("")}</div>
+    <div class="head"><span class="mono kicker">${access.owner ? "Owner console" : "Co-owner console"}</span><h2>${tabs.find(([key]) => key === active)[1]}</h2></div>
     <div id="owner-body"></div>
   </section>`;
-  countUp(app);
   const body = document.getElementById("owner-body");
   if (active === "products") drawProducts(body, ctx);
   else if (active === "settings") drawSettings(body, ctx);

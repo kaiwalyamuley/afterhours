@@ -26,6 +26,8 @@ const isMobile = () => matchMedia("(max-width: 820px)").matches;
 const side = () => document.getElementById("side");
 
 let storageKey = "";
+const openGroups = new Map();
+const CHEVRON = '<svg class="ic side-chev side-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
 
 function setOpen(open, remember = true) {
   document.body.classList.toggle("side-open", open);
@@ -47,6 +49,12 @@ export function mountSide(page, defaultOpen) {
   document.body.dataset.sideBound = "1";
   document.addEventListener("click", (event) => {
     if (event.target.closest("[data-side-toggle]")) return setOpen(!document.body.classList.contains("side-open"));
+    const summary = event.target.closest(".side-group summary");
+    if (summary && !document.body.classList.contains("side-open")) {
+      event.preventDefault();
+      summary.parentElement.open = true;
+      return setOpen(true);
+    }
     if (event.target.closest(".side-back")) return setOpen(false);
     if (isMobile() && event.target.closest("#side a")) setOpen(false);
   });
@@ -62,21 +70,30 @@ export function unmountSide() {
 
 export const sideToggle = () => `<button class="side-toggle" data-side-toggle aria-label="Toggle menu" aria-controls="side" aria-expanded="${document.body.classList.contains("side-open")}">${icon("menu")}</button>`;
 
-/** links: [{href, label, icon, badge, external}], info: [{label, value, href}] */
-export function drawSide({ account, links, info = [], signIn, signOut, fallbackHref }) {
+/** links: [{href, label, icon, badge, external} or {label, icon, children: [{href, label}]}], info: [{label, value, href}] */
+export function drawSide({ account, links, info = [], signOut, fallbackHref }) {
   const current = location.hash || fallbackHref || "#/";
   const isActive = (href) => (href === "#/" ? current === "#/" : current === href || current.startsWith(`${href}/`));
+  const group = (l) => {
+    const active = l.children.some((c) => c.href === current);
+    const open = openGroups.get(l.label) ?? active;
+    return `<details class="side-group ${active ? "has-on" : ""}" data-group="${esc(l.label)}" ${open ? "open" : ""}>
+      <summary title="${esc(l.label)}">${icon(l.icon)}<span class="side-text">${esc(l.label)}</span>${CHEVRON}</summary>
+      <div class="side-sub">${l.children.map((c) => `<a href="${esc(c.href)}" class="${c.href === current ? "on" : ""}">${esc(c.label)}</a>`).join("")}</div>
+    </details>`;
+  };
+  const link = (l) => `<a href="${esc(l.href)}" title="${esc(l.label)}" class="${isActive(l.href) ? "on" : ""}" ${l.external ? 'target="_blank" rel="noopener"' : ""}>
+      ${icon(l.icon)}<span class="side-text">${esc(l.label)}</span>${l.badge ? `<b class="pill">${esc(l.badge)}</b>` : ""}</a>`;
   const person = account
-    ? `<div class="side-person"><span class="side-avatar">${esc((account.name || account.email || "?")[0].toUpperCase())}</span>
-        <span class="side-text"><strong>${esc(account.name || account.email)}</strong><small>${esc(account.tag || account.email || "")}</small></span></div>`
-    : `<button class="btn primary wide side-signin">${icon("out")}<span class="side-text">Sign in</span></button>`;
+    ? `<div class="side-top"><div class="side-person"><span class="side-avatar">${esc((account.name || account.email || "?")[0].toUpperCase())}</span>
+        <span class="side-text"><strong>${esc(account.name || account.email)}</strong><small>${esc(account.tag || account.email || "")}</small></span></div></div>`
+    : "";
   side().innerHTML = `<div class="side-inner">
-    <div class="side-top">${person}</div>
-    <nav class="side-links" aria-label="Main menu">${links.map((l) => `<a href="${esc(l.href)}" title="${esc(l.label)}" class="${isActive(l.href) ? "on" : ""}" ${l.external ? 'target="_blank" rel="noopener"' : ""}>
-      ${icon(l.icon)}<span class="side-text">${esc(l.label)}</span>${l.badge ? `<b class="pill">${esc(l.badge)}</b>` : ""}</a>`).join("")}</nav>
+    ${person}
+    <nav class="side-links" aria-label="Main menu">${links.map((l) => (l.children ? group(l) : link(l))).join("")}</nav>
     ${info.length ? `<dl class="side-info side-text">${info.map((row) => `<div><dt>${esc(row.label)}</dt><dd>${row.href ? `<a href="${esc(row.href)}">${esc(row.value)}</a>` : esc(row.value)}</dd></div>`).join("")}</dl>` : ""}
     ${account ? `<button class="side-out" title="Sign out">${icon("out")}<span class="side-text">Sign out</span></button>` : ""}
   </div>`;
-  side().querySelector(".side-signin")?.addEventListener("click", signIn);
+  side().querySelectorAll(".side-group").forEach((d) => d.addEventListener("toggle", () => openGroups.set(d.dataset.group, d.open)));
   side().querySelector(".side-out")?.addEventListener("click", signOut);
 }

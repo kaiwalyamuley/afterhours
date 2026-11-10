@@ -295,6 +295,7 @@ export async function drawAnalytics(body, ctx) {
         <section class="panel"><h3>Products</h3>${productRows.length ? `<div class="size-table-wrap"><table class="size-table"><thead><tr><th>Product</th><th>Sold</th><th>Sales</th><th>Margin</th></tr></thead><tbody>${productRows.map(([name, r]) => `<tr><th>${esc(name)}</th><td>${r.units}</td><td>${whole(r.revenue)}</td><td>${whole(r.margin)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="muted small">No sales in this period.</p>'}</section>
         ${panelTable("Collections", tally(items, (i) => collections.get(i.product_id) || "Other", (i) => i.unit_price_inr * i.quantity).map(([k, n]) => [k, whole(n)]), "No sales in this period.")}
         ${panelTable("Sizes sold", tally(items, (i) => i.size, (i) => i.quantity).map(([k, n]) => [k, `${n} sold`]), "No sales in this period.")}
+        ${items.some((i) => i.color_name) ? panelTable("Colours sold", tally(items, (i) => i.color_name, (i) => i.quantity).map(([k, n]) => [k, `${n} sold`]), "") : ""}
         ${panelTable("Top cities", tally(a.sold, (o) => o.city.trim()).slice(0, 10).map(([k, n]) => [k, `${n} order${n === 1 ? "" : "s"}`]), "No orders in this period.")}
         ${panelTable("Top states", tally(a.sold, (o) => o.state.trim()).slice(0, 10).map(([k, n]) => [k, `${n} order${n === 1 ? "" : "s"}`]), "No orders in this period.")}
         ${panelTable("Payment type", tally(a.sold, (o) => paymentNames[o.payment_method]).map(([k, n]) => [k, `${n} order${n === 1 ? "" : "s"}`]), "No orders in this period.")}

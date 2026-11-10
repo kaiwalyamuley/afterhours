@@ -1,5 +1,5 @@
 import { api, DEMO } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART } from "./ui.js";
 import { calm, pageSwap, reveal, bindTilt, flyToBag, autoScroll, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
 import { mountSide, drawSide, sideToggle } from "./side.js";
 import { CUSTOMER_REASONS, SUPPORT_TOPICS } from "./reasons.js";
@@ -23,14 +23,22 @@ const writeBag = () => {
   drawNav();
 };
 const bagCount = () => bag.reduce((sum, line) => sum + line.quantity, 0);
+const colorChoice = (product, hex) => {
+  const colors = product?.colors || [];
+  if (!colors.length) return null;
+  return colors.find((c) => c.hex.toLowerCase() === (hex || "").toLowerCase()) || (!hex && colors.length === 1 ? colors[0] : undefined);
+};
 const bagLines = () => bag
-  .map((line) => ({ ...line, product: store.products.find((p) => p.id === line.product_id) }))
-  .filter((line) => line.product?.status === "live");
+  .map((line) => {
+    const product = store.products.find((p) => p.id === line.product_id);
+    return { ...line, product, choice: colorChoice(product, line.color) };
+  })
+  .filter((line) => line.product?.status === "live" && line.choice !== undefined);
 
-function addToBag(productId, size) {
-  const line = bag.find((l) => l.product_id === productId && l.size === size);
+function addToBag(productId, size, color = "") {
+  const line = bag.find((l) => l.product_id === productId && l.size === size && (l.color || "") === color);
   if (line) line.quantity = Math.min(10, line.quantity + 1);
-  else bag.push({ product_id: productId, size, quantity: 1 });
+  else bag.push({ product_id: productId, size, color, quantity: 1 });
   writeBag();
   toast(`Added to bag, size ${size}`);
 }
@@ -73,16 +81,11 @@ function drawNav() {
   document.getElementById("nav").innerHTML = `<nav class="nav">
     <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="AfterHours home"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a></div>
     <div class="links">
-      <a href="#/shop">Shop</a>
-      <a class="nav-help" href="#/help">Help</a>
       <a class="bag-link" href="#/bag">Bag<b class="pill">${bagCount()}</b></a>
-      ${signedIn
-        ? `<button class="link" id="sign-out">Sign out</button>`
-        : `<button class="btn small primary" id="sign-in">Sign in</button>`}
+      ${signedIn ? "" : `<button class="btn small primary" id="sign-in">Sign in</button>`}
     </div>
   </nav>`;
   document.getElementById("sign-in")?.addEventListener("click", () => signInModal());
-  document.getElementById("sign-out")?.addEventListener("click", leave);
   drawCustomerSide();
 }
 
@@ -102,22 +105,18 @@ const paymentText = () => (hasUpi() && hasCod() ? "UPI or cash on delivery" : ha
 
 function drawCustomerSide() {
   const s = store.settings;
-  const info = [{ label: "Payment", value: paymentText() }, { label: "Shipping", value: shippingText() }];
-  if (s.support_phone) info.push({ label: "Helpline", value: s.support_phone, href: `tel:${s.support_phone.replace(/\s/g, "")}` });
-  if (s.support_hours) info.push({ label: "Support hours", value: s.support_hours });
+  const info = s.support_phone ? [{ label: "Helpline", value: s.support_phone, href: `tel:${s.support_phone.replace(/\s/g, "")}` }] : [];
+  const collections = [...new Set(visible().map((p) => p.collection))];
   drawSide({
     account: store.profile && { name: store.profile.full_name, email: store.profile.email, tag: store.profile.email },
     links: [
       { href: "#/", label: "Home", icon: "home" },
-      { href: "#/shop", label: "Shop all graphics", icon: "shop" },
-      { href: "#/bag", label: "My bag", icon: "bag", badge: bagCount() || "" },
+      { label: "Shop by collection", icon: "shop", children: [{ href: "#/shop", label: "All graphics" }, ...collections.map((c) => ({ href: `#/shop/${encodeURIComponent(c)}`, label: c }))] },
       { href: "#/orders", label: "My orders", icon: "orders", badge: store.activeOrders || "" },
       ...(activeTiers().length ? [{ href: "#/membership", label: "Membership", icon: "crown" }] : []),
       { href: "#/help", label: "Help and contact", icon: "help" },
-      { href: "privacy.html", label: "Privacy policy", icon: "shield" },
     ],
     info,
-    signIn: () => signInModal(),
     signOut: leave,
   });
 }
@@ -131,7 +130,6 @@ function drawFooter() {
       ${s.business_address ? `<p class="muted small">AfterHours Streetwear Co., ${esc(s.business_address)}</p>` : ""}
     </div>
     <nav class="foot-links" aria-label="Footer">
-      <a class="foot-link" href="#/help">Help and contact</a>
       <a class="foot-link" href="privacy.html">Privacy Policy</a>
       ${s.instagram_url ? `<a class="foot-link" href="${esc(s.instagram_url)}" target="_blank" rel="noopener">Instagram</a>` : ""}
     </nav>
@@ -161,13 +159,14 @@ function card(p) {
   return `<a class="card" href="#/p/${esc(p.slug)}">
     <div class="card-art">
       <span class="tag mono">${esc(soon ? "Coming soon" : p.collection)}</span>
-      <div class="flip"><div class="side a">${tee(p, "back")}</div><div class="side b">${tee(p, "front")}</div></div>
+      <div class="flip"><div class="side a">${tee(p, "back", false, p.colors?.[0]?.hex)}</div><div class="side b">${tee(p, "front", false, p.colors?.[0]?.hex)}</div></div>
     </div>
     <div class="card-info">
       <h3>${esc(p.name)}</h3>
       <p class="muted">${esc(p.tagline)}</p>
       ${reviewsFor(p.id).length ? `<p class="card-rating"><b>★</b> ${averageRating(reviewsFor(p.id))} <span class="muted">(${reviewsFor(p.id).length})</span></p>` : ""}
       <p class="price">${money(p.price_inr)}${off ? ` <s>${money(p.compare_at_inr)}</s> <em>${off}% off</em>` : ""}</p>
+      ${p.colors?.length > 1 ? `<div class="dots" role="img" aria-label="${p.colors.length} colours">${p.colors.slice(0, 6).map((c) => `<i style="--c:${esc(c.hex)}"></i>`).join("")}</div>` : ""}
     </div>
   </a>`;
 }
@@ -309,26 +308,32 @@ async function pageHome() {
   if (slot) slot.innerHTML = strip;
 }
 
-function pageShop(filter = "All") {
-  const collections = ["All", ...new Set(visible().map((p) => p.collection))];
-  const items = filter === "All" ? visible() : visible().filter((p) => p.collection === filter);
+let shopFor = "all";
+
+function pageShop(collection = "") {
+  const items = visible().filter((p) => (!collection || p.collection === collection) && (shopFor === "all" || p.gender === shopFor || p.gender === "unisex"));
   app.innerHTML = `<section class="section first">
-    <div class="head"><span class="mono kicker">The catalogue</span><h2>All graphics</h2></div>
-    <div class="chips">${collections.map((c) => `<button class="chip ${c === filter ? "on" : ""}" data-c="${esc(c)}">${esc(c)}</button>`).join("")}</div>
+    <div class="head"><span class="mono kicker">The catalogue</span><h2>${esc(collection || "All graphics")}</h2></div>
+    <div class="chips">${[["all", "All"], ["male", "Male"], ["female", "Female"]].map(([value, label]) => `<button class="chip ${value === shopFor ? "on" : ""}" data-for="${value}">${label}</button>`).join("")}</div>
     ${grid(items)}
   </section>`;
-  app.querySelectorAll("[data-c]").forEach((b) => b.addEventListener("click", () => pageShop(b.dataset.c)));
+  app.querySelectorAll("[data-for]").forEach((b) => b.addEventListener("click", () => {
+    shopFor = b.dataset.for;
+    pageShop(collection);
+  }));
   reveal(app);
 }
 
 function pageProduct(slug) {
   const p = visible().find((x) => x.slug === slug);
   if (!p) return notFound();
+  const colors = p.colors || [];
+  let color = colors[0] || null;
   const slides = [{ side: "back", label: "Back" }, { side: "front", label: "Front" }];
   if (p.model_image) slides.push({ src: p.model_image, label: "On model" });
   (p.gallery || []).forEach((src, i) => slides.push({ src, label: `Photo ${i + 1}` }));
-  const slideView = (s) => (s.src ? `<img class="model" src="${esc(s.src)}" alt="${esc(p.name)}: ${esc(s.label)}">` : tee(p, s.side, true));
-  const thumbView = (s) => (s.src ? `<img src="${esc(s.src)}" alt="" loading="lazy">` : tee(p, s.side));
+  const slideView = (s) => (s.src ? `<img class="model" src="${esc(s.src)}" alt="${esc(p.name)}: ${esc(s.label)}">` : tee(p, s.side, true, color?.hex));
+  const thumbView = (s) => (s.src ? `<img src="${esc(s.src)}" alt="" loading="lazy">` : tee(p, s.side, false, color?.hex));
   const reviews = reviewsFor(p.id);
   const live = p.status === "live";
   app.innerHTML = `<section class="section first pdp">
@@ -343,12 +348,14 @@ function pageProduct(slug) {
       ${reviews.length ? `<a class="rating-link" href="#reviews-section" id="rating-link">${starRow(Math.round(averageRating(reviews)))} ${averageRating(reviews)} (${reviews.length} review${reviews.length === 1 ? "" : "s"})</a>` : ""}
       <p class="price big">${money(p.price_inr)}${p.compare_at_inr > p.price_inr ? ` <s>${money(p.compare_at_inr)}</s>` : ""}</p>
       <p class="muted">${esc(p.description)}</p>
+      ${live && colors.length > 1 ? `<span class="mono label">Colour: <b id="color-name">${esc(color.name)}</b></span>
+      <div class="swatches">${colors.map((c, i) => `<button class="swatch ${i ? "" : "on"}" data-color="${i}" style="--c:${esc(c.hex)}" title="${esc(c.name)}" aria-label="${esc(c.name)}" aria-pressed="${!i}"></button>`).join("")}</div>` : ""}
       ${live ? `<div class="size-head"><span class="mono label">Size</span><button type="button" class="size-guide" id="size-guide">Size guide</button></div>
       <div class="sizes">${p.sizes.map((s, i) => `<button class="size ${i === 1 ? "on" : ""}" data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>
       <div class="row"><button class="btn primary" id="add">Add to bag</button><button class="btn" id="buy">Buy now</button></div>`
       : `<p class="notice mono">Coming soon</p>`}
       <ul class="assure">
-        <li>Printed to order on a black tee</li>
+        <li>${colors.length > 1 ? "Printed to order" : `Printed to order on a ${esc((colors[0]?.name || "black").toLowerCase())} tee`}</li>
         <li>Pay by ${esc(paymentText())} (shipping ${esc(shippingText())})</li>
         ${store.settings.delivery_note ? `<li>${esc(store.settings.delivery_note)}</li>` : ""}
         <li>Questions? <a href="#/help">Contact us</a></li>
@@ -357,8 +364,7 @@ function pageProduct(slug) {
   </section>
   <section class="section reviews" id="reviews-section">
     <div class="head"><span class="mono kicker">From verified buyers</span><h2>Reviews</h2></div>
-    ${reviews.length ? `<p class="review-score">${starRow(Math.round(averageRating(reviews)))} <strong>${averageRating(reviews)}</strong> <span class="muted">from ${reviews.length} delivered order${reviews.length === 1 ? "" : "s"}</span></p>
-    <div class="review-list">${reviews.slice(0, 20).map((r) => `<article class="panel review">${starRow(r.rating)}${r.comment ? `<p>${esc(r.comment)}</p>` : ""}<p class="muted small">${esc(r.reviewer_name)} · Verified buyer · ${new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p></article>`).join("")}</div>`
+    ${reviews.length ? `<div class="review-list">${reviews.slice(0, 20).map((r) => `<article class="panel review">${starRow(r.rating)}${r.comment ? `<p>${esc(r.comment)}</p>` : ""}<p class="muted small">${esc(r.reviewer_name)} · Verified buyer · ${new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p></article>`).join("")}</div>`
     : '<p class="muted">No reviews yet. Customers can leave a review from their orders page after delivery.</p>'}
   </section>`;
   const stage = document.getElementById("stage");
@@ -399,12 +405,23 @@ function pageProduct(slug) {
     size = b.dataset.s;
     app.querySelectorAll("[data-s]").forEach((x) => x.classList.toggle("on", x === b));
   }));
+  app.querySelectorAll("[data-color]").forEach((b) => b.addEventListener("click", () => {
+    color = colors[Number(b.dataset.color)];
+    app.querySelectorAll("[data-color]").forEach((x) => {
+      x.classList.toggle("on", x === b);
+      x.setAttribute("aria-pressed", String(x === b));
+    });
+    document.getElementById("color-name").textContent = color.name;
+    thumbs.querySelectorAll("[data-slide]").forEach((t, i) => { if (!slides[i].src) t.innerHTML = thumbView(slides[i]); });
+    holdUntil = Date.now() + 10000;
+    showSlide(slides[current].src ? 0 : current);
+  }));
   document.getElementById("size-guide")?.addEventListener("click", () => showSizeGuide(size));
   document.getElementById("add")?.addEventListener("click", () => {
-    addToBag(p.id, size);
+    addToBag(p.id, size, color?.hex || "");
     flyToBag(stage.firstElementChild);
   });
-  document.getElementById("buy")?.addEventListener("click", () => { addToBag(p.id, size); location.hash = "#/checkout"; });
+  document.getElementById("buy")?.addEventListener("click", () => { addToBag(p.id, size, color?.hex || ""); location.hash = "#/checkout"; });
 }
 
 function showSizeGuide(selected) {
@@ -436,16 +453,16 @@ function pageBag() {
   }
   app.innerHTML = `<section class="section first two">
     <div><div class="head"><h2>Your bag</h2></div>
-      ${lines.map((l) => `<div class="line" data-p="${esc(l.product_id)}" data-s="${esc(l.size)}">
-        <div class="thumb">${tee(l.product, "back")}</div>
-        <div class="grow"><h3>${esc(l.product.name)}</h3><p class="mono muted">Size ${esc(l.size)}</p><p class="price">${money(l.product.price_inr)}</p></div>
+      ${lines.map((l) => `<div class="line" data-p="${esc(l.product_id)}" data-s="${esc(l.size)}" data-c="${esc(l.color || "")}">
+        <div class="thumb">${tee(l.product, "back", false, l.choice?.hex)}</div>
+        <div class="grow"><h3>${esc(l.product.name)}</h3><p class="mono muted">Size ${esc(l.size)}</p>${colorTag(l.choice?.name, l.choice?.hex)}<p class="price">${money(l.product.price_inr)}</p></div>
         <div class="qty"><button aria-label="Fewer" data-d="-1">−</button><span>${l.quantity}</span><button aria-label="More" data-d="1">+</button></div>
       </div>`).join("")}
     </div>
     <aside class="panel">${summary(lines)}<a class="btn primary wide" href="#/checkout">Checkout</a></aside>
   </section>`;
   app.querySelectorAll(".line").forEach((row) => row.querySelectorAll("[data-d]").forEach((b) => b.addEventListener("click", () => {
-    const line = bag.find((l) => l.product_id === row.dataset.p && l.size === row.dataset.s);
+    const line = bag.find((l) => l.product_id === row.dataset.p && l.size === row.dataset.s && (l.color || "") === row.dataset.c);
     line.quantity = Math.min(10, line.quantity + Number(b.dataset.d));
     bag = bag.filter((l) => l.quantity > 0);
     writeBag();
@@ -493,7 +510,7 @@ async function pageCheckout() {
       <button class="btn primary wide" id="place">Place order</button>
     </form>
     <aside class="panel">
-      ${lines.map((l) => `<p class="row-between"><span>${esc(l.product.name)} · ${esc(l.size)} × ${l.quantity}</span><span>${money(l.quantity * l.product.price_inr)}</span></p>`).join("")}
+      ${lines.map((l) => `<p class="row-between"><span>${esc(l.product.name)}${l.choice ? ` · ${esc(l.choice.name)}` : ""} · ${esc(l.size)} × ${l.quantity}</span><span>${money(l.quantity * l.product.price_inr)}</span></p>`).join("")}
       <div id="pay-sum"></div>
       <ul class="assure">
         <li>We confirm every payment before your tee is printed.</li>
@@ -511,7 +528,7 @@ async function pageCheckout() {
     box.innerHTML = `<dl class="sum"><dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>${o.coupon ? `<dt>Coupon ${esc(coupon.code)}</dt><dd>-${money(o.coupon)}</dd>` : ""}${o.member ? `<dt>${esc(memberTier.name)} member discount</dt><dd>-${money(o.member)}</dd>` : ""}<dt>Shipping</dt><dd>${o.shipping ? money(o.shipping) : "Free"}</dd>
       ${o.discount ? `<dt>UPI discount</dt><dd>-${money(o.discount)}</dd>` : ""}
       <dt class="t">Total</dt><dd class="t">${money(o.total)}</dd>
-      <dt>Pay now by UPI</dt><dd>${money(o.now)}</dd><dt>Pay at delivery</dt><dd>${money(o.total - o.now)}</dd></dl>`;
+      ${o.now && o.now < o.total ? `<dt>Pay now by UPI</dt><dd>${money(o.now)}</dd><dt>Pay at delivery</dt><dd>${money(o.total - o.now)}</dd>` : ""}</dl>`;
   };
   showSum();
   form.addEventListener("change", (event) => { if (event.target.name === "payment") showSum(); });
@@ -568,7 +585,7 @@ async function pageCheckout() {
     button.textContent = "Placing order";
     try {
       const result = await api.placeOrder(
-        lines.map((l) => ({ product_id: l.product_id, size: l.size, quantity: l.quantity })),
+        lines.map((l) => ({ product_id: l.product_id, size: l.size, quantity: l.quantity, color: l.choice?.hex || "" })),
         { name: values.name.trim(), phone, line: values.line.trim(), city: values.city.trim(), state: values.state.trim(), pincode: values.pincode.trim() },
         values.note.trim(),
         chosen().id,
@@ -727,7 +744,7 @@ async function pageOrders() {
     <div class="stack">${orders.map((o) => `<article class="panel order">
       <header class="row-between"><div><span class="mono">${esc(o.order_no)}</span><p class="muted small">${when(o.created_at)}</p></div><span class="status ${o.status}">${STATUS[o.status].label}</span></header>
       ${timeline(o.status)}
-      ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
+      ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)}${i.color_name ? ` · ${esc(i.color_name)}` : ""} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
         ${o.status === "delivered" && i.product_id ? `<button class="btn small" data-review="${esc(i.product_id)}" data-name="${esc(i.name)}">${mine.has(i.product_id) ? `Edit your review (${mine.get(i.product_id).rating}★)` : "Write a review"}</button>` : ""}`).join("")}
       ${o.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(o.coupon_code)}</span><span>-${money(o.coupon_discount_inr)}</span></p>` : ""}
       ${o.member_tier ? `<p class="row-between small"><span>${esc(o.member_tier)} member discount</span><span>-${money(o.member_discount_inr)}</span></p>` : ""}
@@ -837,7 +854,7 @@ async function route() {
     window.scrollTo({ top: 0, behavior: "instant" });
     try {
       if (page === "") await pageHome();
-      else if (page === "shop") pageShop();
+      else if (page === "shop") pageShop(decodeURIComponent(arg));
       else if (page === "p") pageProduct(arg);
       else if (page === "bag") pageBag();
       else if (page === "checkout") await pageCheckout();

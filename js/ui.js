@@ -85,15 +85,18 @@ export const STATUS = {
 
 const SHAPE = "M205 58C236 92 364 92 395 58L470 86C512 118 556 164 590 212L512 288L466 244L470 660Q300 680 130 660L134 244L88 288L10 212C44 164 88 118 130 86Z";
 
-function teeSvg(side) {
+function teeSvg(side, hex) {
+  const rim = hex ? "rgba(0,0,0,.28)" : "#35353c";
   const collar = side === "front"
-    ? '<path d="M205 58C232 124 368 124 395 58" fill="none" stroke="#35353c" stroke-width="13"/><path d="M216 60C240 110 360 110 384 60C352 76 248 76 216 60Z" fill="#0b0b0d"/>'
-    : '<path d="M205 58C236 86 364 86 395 58" fill="none" stroke="#35353c" stroke-width="13"/>';
+    ? `<path d="M205 58C232 124 368 124 395 58" fill="none" stroke="${rim}" stroke-width="13"/><path d="M216 60C240 110 360 110 384 60C352 76 248 76 216 60Z" fill="${hex ? "rgba(0,0,0,.45)" : "#0b0b0d"}"/>`
+    : `<path d="M205 58C236 86 364 86 395 58" fill="none" stroke="${rim}" stroke-width="13"/>`;
   return `<svg class="tee-base" viewBox="0 0 600 700" aria-hidden="true">
     <defs>
       <linearGradient id="teeFill-${side}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#232329"/><stop offset=".55" stop-color="#17171b"/><stop offset="1" stop-color="#101013"/></linearGradient>
+      <linearGradient id="teeShade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".1"/><stop offset=".5" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".28"/></linearGradient>
     </defs>
-    <path d="${SHAPE}" fill="url(#teeFill-${side})" stroke="#2e2e35" stroke-width="2"/>
+    <path d="${SHAPE}" fill="${hex ? esc(hex) : `url(#teeFill-${side})`}" stroke="${hex ? "rgba(255,255,255,.16)" : "#2e2e35"}" stroke-width="2"/>
+    ${hex ? `<path d="${SHAPE}" fill="url(#teeShade)"/>` : ""}
     <g fill="none" stroke="#fff" stroke-opacity=".035" stroke-width="10" stroke-linecap="round">
       <path d="M170 300C190 420 168 540 182 640"/><path d="M430 330C410 440 436 540 418 640"/><path d="M134 244C142 210 150 170 160 130"/><path d="M466 244C458 210 450 170 440 130"/>
     </g>
@@ -101,9 +104,11 @@ function teeSvg(side) {
   </svg>`;
 }
 
-/** A black tee with the print placed where it will sit on the real shirt. */
-export function tee(product, side = "back", eager = false) {
+/** A tee in the given colour (black if none), with the print where it will sit on the real shirt. */
+export function tee(product, side = "back", eager = false, hex = "") {
   const src = side === "front" ? product.print_front : product.print_back;
   const art = src ? `<img class="tee-print ${side}" src="${esc(src)}" alt="" loading="${eager ? "eager" : "lazy"}">` : "";
-  return `<div class="tee">${teeSvg(side)}${art}</div>`;
+  return `<div class="tee">${teeSvg(side, hex)}${art}</div>`;
 }
+
+export const colorTag = (name, hex, showHex = false) => (hex ? `<span class="color-tag"><i style="--c:${esc(hex)}"></i>${esc(name)}${showHex ? ` <code>${esc(hex)}</code>` : ""}</span>` : "");

@@ -24,23 +24,18 @@ function drawNav() {
   nav.innerHTML = `<nav class="nav">
     <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="Owner console"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a></div>
     <div class="links">
-      <span class="mono owner-chip">${store.profile.access.owner ? "Owner" : "Co-owner"}${store.ownerPending ? `<b class="pill">${store.ownerPending}</b>` : ""}</span>
-      <a href="index.html" target="_blank" rel="noopener">View store</a>
-      <button class="link" id="sign-out">Sign out</button>
+      ${store.ownerPending ? `<a class="nav-alert" href="#/orders">Waiting<b class="pill">${store.ownerPending}</b></a>` : ""}
     </div>
   </nav>`;
-  document.getElementById("sign-out").addEventListener("click", () => api.signOut());
   const { access, full_name: name, email } = store.profile;
   const tabs = consoleTabs(access);
-  const badges = { orders: store.ownerPending, help: store.openHelp, products: store.products.length };
-  const info = access.orders ? [{ label: "Waiting for you", value: `${store.ownerPending} order${store.ownerPending === 1 ? "" : "s"}` }, { label: "Open messages", value: String(store.openHelp) }] : [];
+  const badges = { orders: store.ownerPending, help: store.openHelp };
   drawSide({
     account: { name, email, tag: access.owner ? "Owner" : "Co-owner" },
     links: [
       ...tabs.map(([key, label, , icon]) => ({ href: `#/${key}`, label, icon, badge: badges[key] || "" })),
       { href: "index.html", label: "View store", icon: "store", external: true },
     ],
-    info,
     signOut: () => api.signOut(),
     fallbackHref: `#/${tabs[0][0]}`,
   });
