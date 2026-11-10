@@ -28,6 +28,13 @@ async function liveApi() {
   };
   const orderSelect = "*, order_items(*)";
 
+  const callShipping = async (body) => {
+    const { data, error } = await db.functions.invoke("ship-order", { body });
+    if (!error) return data;
+    const details = await error.context?.json?.().catch(() => null);
+    throw new Error(details?.error || "Could not reach the shipping service. Please try again.");
+  };
+
   return {
     async currentProfile() {
       const { data } = await db.auth.getSession();
@@ -67,6 +74,12 @@ async function liveApi() {
     async placeOrder(items, address, note, payment) {
       const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment }));
       return rows[0];
+    },
+    async shipRates(orderId) {
+      return callShipping({ action: "rates", order_id: orderId });
+    },
+    async shipBook(orderId, courierId) {
+      return callShipping({ action: "book", order_id: orderId, courier_id: courierId });
     },
     async submitPaymentRef(orderId, ref) {
       unwrap(await db.rpc("submit_payment_ref", { p_order_id: orderId, p_ref: ref }));

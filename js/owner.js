@@ -17,7 +17,7 @@ const GROUPS = [
 const NEXT = {
   pending: [["accepted", "Accept order", "primary"], ["rejected", "Decline", ""]],
   accepted: [["printing", "Send to print", "primary"], ["rejected", "Decline", ""]],
-  printing: [["dispatched", "Mark dispatched", "primary"]],
+  printing: [["dispatched", "Mark dispatched by hand", ""]],
   dispatched: [["delivered", "Mark delivered", "primary"]],
 };
 
@@ -62,13 +62,46 @@ function orderCard(order) {
       <p><strong>${esc(order.customer_name)}</strong><br>${esc(order.address_line)}<br>${esc(order.city)}, ${esc(order.state)} ${esc(order.pincode)}</p>
       <p class="contact"><a href="tel:+91${digits}">+91 ${digits}</a> <a href="https://wa.me/91${digits}" target="_blank" rel="noopener">WhatsApp</a></p>
       ${order.customer_note ? `<p class="muted">Note: ${esc(order.customer_note)}</p>` : ""}
-      ${order.tracking_no ? `<p class="mono small">Tracking: ${esc(order.tracking_no)}</p>` : ""}
+      ${order.tracking_no ? `<p class="mono small">Tracking: ${esc(order.tracking_no)}${order.courier_name ? ` · ${esc(order.courier_name)}` : ""}${order.shipping_status ? ` · ${esc(order.shipping_status)}` : ""}</p>` : ""}
+      ${order.shipping_label_url ? `<p class="small"><a class="file" href="${esc(order.shipping_label_url)}" target="_blank" rel="noopener">Download shipping label</a></p>` : ""}
       ${order.cancel_reason ? `<p class="reason-note">${order.status === "cancelled" ? "Customer's reason" : "Declined"}: ${esc(order.cancel_reason)}</p>` : ""}
     </div>
     <p class="row-between total"><span>Total</span><strong>${money(order.total_inr)}</strong></p>
     ${paymentBox(order)}
-    <div class="row">${(NEXT[order.status] || []).filter(([status]) => status !== "accepted" || canAccept(order)).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
+    <div class="row">${order.status === "printing" && !order.tracking_no ? `<button class="btn small primary" data-ship="${esc(order.id)}">Ship with Shiprocket</button>` : ""}${(NEXT[order.status] || []).filter(([status]) => status !== "accepted" || canAccept(order)).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
   </article>`;
+}
+
+function shipWithCourier(orderId, ctx) {
+  openModal(`<h2>Ship this order</h2><div id="ship-body"><p class="muted">Finding couriers...</p></div>`, async (modal, close) => {
+    const area = modal.querySelector("#ship-body");
+    const showError = (message) => { area.innerHTML = `<p class="error">${esc(message)}</p>`; };
+    let quote;
+    try {
+      quote = await api.shipRates(orderId);
+    } catch (error) {
+      return showError(error.message);
+    }
+    if (!quote.couriers.length) return showError("No courier can deliver to this PIN code right now.");
+    area.innerHTML = `<p class="muted small">Pickup from <strong>${esc(quote.pickup)}</strong>. Courier collects <strong>${quote.collect ? money(quote.collect) : "nothing, already paid"}</strong>. The price is taken from your Shiprocket wallet.</p>
+      <div class="couriers">${quote.couriers.map((c) => `<button class="courier" data-courier="${c.id}" data-name="${esc(c.name)}" data-rate="${c.rate}">
+        <span><strong>${esc(c.name)}</strong>${c.recommended ? ' <em class="rec">Recommended</em>' : ""}<small class="muted">${c.days ? `About ${esc(c.days)} days` : esc(c.etd || "")}${c.rating ? ` · Rated ${esc(c.rating)}` : ""}</small></span><b>${money(c.rate)}</b></button>`).join("")}</div>`;
+    area.querySelectorAll("[data-courier]").forEach((button) => button.addEventListener("click", async () => {
+      if (!confirm(`Book ${button.dataset.name} for ${money(button.dataset.rate)}? This charges your Shiprocket wallet.`)) return;
+      area.innerHTML = '<p class="muted">Booking the shipment...</p>';
+      try {
+        const result = await api.shipBook(orderId, Number(button.dataset.courier));
+        close();
+        toast(`Booked with ${result.courier}. Tracking ${result.awb}`);
+        result.warnings.forEach((warning) => toast(warning, "bad"));
+        orderTab = "shipped";
+        await ctx.refresh();
+        await ctx.redraw();
+      } catch (error) {
+        showError(error.message);
+      }
+    }));
+  });
 }
 
 function askTracking() {
@@ -99,6 +132,7 @@ function drawOrders(body, orders, ctx) {
     drawOrders(body, orders, ctx);
   }));
   body.querySelector("#reload").addEventListener("click", ctx.redraw);
+  body.querySelectorAll("[data-ship]").forEach((b) => b.addEventListener("click", () => shipWithCourier(b.dataset.ship, ctx)));
   body.querySelectorAll("[data-pay]").forEach((b) => b.addEventListener("click", async () => {
     const { pay, id } = b.dataset;
     const prompts = { fail: "Mark this payment as not received? The customer will be asked to pay again.", verify: "Have you confirmed this money in your bank or UPI app?", refunded: "Have you sent this refund?" };
@@ -269,6 +303,16 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Free shipping over (₹)</span><input name="free_shipping_over" type="number" min="0" step="1" required value="${s.free_shipping_over}"></label>
     </div>
     ${text("delivery_note", "Delivery time, shown to customers", "Example: Delivered in 5 to 7 working days")}
+    <h3>Parcel for Shiprocket</h3>
+    ${text("pickup_location", "Shiprocket pickup location name", "Leave blank to use your primary location")}
+    <div class="cols">
+      <label class="field"><span>Packed weight (kg)</span><input name="parcel_weight_kg" type="number" min="0.01" step="0.01" required value="${s.parcel_weight_kg ?? 0.25}"></label>
+      <label class="field"><span>Length (cm)</span><input name="parcel_length_cm" type="number" min="1" step="0.1" required value="${s.parcel_length_cm ?? 30}"></label>
+    </div>
+    <div class="cols">
+      <label class="field"><span>Breadth (cm)</span><input name="parcel_breadth_cm" type="number" min="1" step="0.1" required value="${s.parcel_breadth_cm ?? 25}"></label>
+      <label class="field"><span>Height (cm)</span><input name="parcel_height_cm" type="number" min="1" step="0.1" required value="${s.parcel_height_cm ?? 3}"></label>
+    </div>
     <h3>Payments</h3>
     <p class="muted small">Add a UPI ID to offer full and advance UPI payment. Customers will see it, so avoid an ID that contains your personal mobile number.</p>
     <div class="cols">${text("upi_id", "UPI ID", "yourbrand@okaxis")}${text("upi_payee", "Name shown in UPI apps", "AfterHours")}</div>
@@ -323,6 +367,10 @@ function drawSettings(body, ctx) {
         upi_qr_url: qrUrl,
         upi_payee: values.upi_payee || "AfterHours",
         cod_enabled: Boolean(data.cod_enabled),
+        parcel_weight_kg: Number(data.parcel_weight_kg),
+        parcel_length_cm: Number(data.parcel_length_cm),
+        parcel_breadth_cm: Number(data.parcel_breadth_cm),
+        parcel_height_cm: Number(data.parcel_height_cm),
         advance_inr: Number(data.advance_inr),
         prepaid_discount_pct: Number(data.prepaid_discount_pct),
         shipping_inr: Number(data.shipping_inr),

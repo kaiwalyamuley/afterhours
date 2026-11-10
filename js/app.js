@@ -538,7 +538,8 @@ async function pageOrders() {
       <div class="pay-line"><span class="pay-state ${esc(o.payment_status)}">${PAYMENT[o.payment_status]}</span>
         ${o.amount_due_now ? `<span class="muted small">UPI ${money(o.amount_due_now)}${paidLater(o) && !["rejected", "cancelled"].includes(o.status) ? `, then ${money(paidLater(o))} at delivery` : ""}</span>` : ""}
         ${["awaiting", "failed"].includes(o.payment_status) && o.status === "pending" ? `<a class="btn small primary" href="#/pay/${esc(o.id)}">${o.payment_status === "failed" ? "Try again" : "Pay now"}</a>` : ""}</div>
-      ${o.tracking_no ? `<p class="mono small">Tracking: ${esc(o.tracking_no)}</p>` : ""}
+      ${o.courier_name ? `<p class="small">Shipped with ${esc(o.courier_name)}. <a class="inline-link" href="https://shiprocket.co/tracking/${encodeURIComponent(o.tracking_no)}" target="_blank" rel="noopener">Track parcel</a></p>` : ""}
+      ${o.tracking_no ? `<p class="mono small">Tracking: ${esc(o.tracking_no)}${o.shipping_status ? ` · ${esc(o.shipping_status)}` : ""}</p>` : ""}
       ${o.cancel_reason ? `<p class="reason-note">Reason: ${esc(o.cancel_reason)}</p>` : ""}
       ${o.status === "pending" && ["cod", "awaiting", "failed"].includes(o.payment_status) ? `<button class="btn small" data-cancel="${esc(o.id)}">Cancel order</button>` : ""}
       ${o.status === "pending" && ["submitted", "verified"].includes(o.payment_status) ? `<p class="muted small">Need to cancel a paid order? <a class="inline-link" href="#/help">Contact us</a></p>` : ""}
