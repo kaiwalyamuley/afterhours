@@ -206,6 +206,22 @@ input[type=file] { padding: 8px; }
 .member { display: grid; gap: 12px; }
 .member-email { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 820px) { .team { grid-template-columns: 1fr; } }
+/* membership */
+.tier-row { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); }
+.tier-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 10px; }
+.tier-price { max-width: 240px; }
+.tier-active { padding: 6px 10px; background: var(--panel); align-items: center; }
+.tier-active input { width: auto; min-height: 0; }
+#tier-list { margin-top: 12px; }
+.member-status { margin-bottom: 18px; }
+.member-status strong { font: 400 clamp(34px, 5vw, 52px)/1.1 var(--display); }
+.member-bar { height: 8px; margin: 12px 0 8px; border-radius: 99px; background: var(--panel-2); overflow: hidden; }
+.member-bar i { display: block; height: 100%; border-radius: 99px; background: var(--orange); }
+.tier .tier-off { color: var(--bone); font-weight: 700; }
+.member-rules { display: grid; gap: 8px; margin: 18px 0 0; padding-left: 20px; }
+.member-strip { color: inherit; }
+.member-cta { margin-top: 20px; }
+
 /* margin and analytics */
 .notice-box { padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--orange); border-radius: 10px; background: var(--orange-soft); font-size: 14px; }
 .margin-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); margin-bottom: 14px; }

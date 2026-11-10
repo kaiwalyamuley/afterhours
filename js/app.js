@@ -5,7 +5,8 @@ import { mountSide, drawSide, sideToggle } from "./side.js";
 import { CUSTOMER_REASONS, SUPPORT_TOPICS } from "./reasons.js";
 
 const app = document.getElementById("app");
-const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, activeOrders: 0, reviews: [] };
+const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, activeOrders: 0, reviews: [], tiers: [] };
+const activeTiers = () => store.tiers.filter((t) => t.active);
 const reviewsFor = (productId) => store.reviews.filter((r) => r.product_id === productId);
 const averageRating = (list) => (list.reduce((sum, r) => sum + r.rating, 0) / list.length).toFixed(1);
 const starRow = (rating) => `<span class="stars" role="img" aria-label="${rating} out of 5 stars">${"★".repeat(rating)}<i>${"★".repeat(5 - rating)}</i></span>`;
@@ -111,6 +112,7 @@ function drawCustomerSide() {
       { href: "#/shop", label: "Shop all graphics", icon: "shop" },
       { href: "#/bag", label: "My bag", icon: "bag", badge: bagCount() || "" },
       { href: "#/orders", label: "My orders", icon: "orders", badge: store.activeOrders || "" },
+      ...(activeTiers().length ? [{ href: "#/membership", label: "Membership", icon: "crown" }] : []),
       { href: "#/help", label: "Help and contact", icon: "help" },
       { href: "privacy.html", label: "Privacy policy", icon: "shield" },
     ],
@@ -237,6 +239,50 @@ function hero() {
   </section>`;
 }
 
+const memberStrip = () => {
+  const tiers = activeTiers();
+  if (!tiers.length) return "";
+  return `<a class="strip member-strip" href="#/membership"><span class="mono">Members</span><strong>Save up to ${Math.max(...tiers.map((t) => t.discount_pct))}% on every order</strong><span class="muted">See how</span></a>`;
+};
+
+async function pageMembership() {
+  const tiers = activeTiers();
+  const openedAt = location.hash;
+  const status = store.profile ? await api.membership().catch(() => null) : null;
+  if (location.hash !== openedAt) return;
+  if (!tiers.length) {
+    app.innerHTML = `<section class="section first"><div class="head"><h2>Membership</h2></div><p class="muted">Membership isn't open right now. Please check back soon.</p></section>`;
+    return;
+  }
+  const orderWord = (n) => `${n} delivered order${n === 1 ? "" : "s"}`;
+  let panel;
+  if (status) {
+    const { delivered, tier, next } = status;
+    const bar = next ? `<div class="member-bar" role="progressbar" aria-label="Progress to ${esc(next.name)}" aria-valuemin="0" aria-valuemax="${next.min_orders}" aria-valuenow="${delivered}"><i style="width:${Math.min((delivered / next.min_orders) * 100, 100)}%"></i></div>
+      <p class="muted small">${next.min_orders - delivered} more delivered order${next.min_orders - delivered === 1 ? "" : "s"} to reach ${esc(next.name)} and save ${next.discount_pct}%.</p>` : '<p class="muted small">You have reached the top tier. Thank you for sticking with us.</p>';
+    panel = `<div class="panel member-status"><span class="mono muted">${orderWord(delivered)} so far</span><br>
+      <strong>${tier ? `${esc(tier.name)} member` : "Not a member yet"}</strong>
+      ${tier ? `<p>You get ${tier.discount_pct}% off every order, taken off automatically at checkout.</p>` : ""}${bar}</div>`;
+  } else {
+    panel = `<div class="panel member-status"><p>Sign in to see your progress. Membership is free and starts with your first order.</p><button class="btn primary" id="member-signin">Sign in</button></div>`;
+  }
+  const upi = store.settings.prepaid_discount_pct && hasUpi();
+  app.innerHTML = `<section class="section first">
+    <div class="head"><span class="mono kicker">AfterHours members</span><h2>Keep coming back. Pay less.</h2></div>
+    ${panel}
+    <div class="tiers">${tiers.map((t) => `<div class="tier ${status?.tier?.name === t.name ? "hot" : ""}"><span class="mono">${esc(t.name)}</span><strong>${t.discount_pct}% off</strong><span class="muted">From ${orderWord(t.min_orders)}</span></div>`).join("")}</div>
+    <ul class="member-rules">
+      <li>It's free, with nothing to sign up for. Every delivered order counts automatically.</li>
+      <li>Your discount comes off every order at checkout.</li>
+      <li>Cancelled, declined and refused orders don't count.</li>
+      <li>A member discount can't be combined with a coupon. You always get whichever saves you more.</li>
+      ${upi ? `<li>Paying in full by UPI still saves you an extra ${store.settings.prepaid_discount_pct}%.</li>` : ""}
+    </ul>
+    <div class="row member-cta"><a class="btn primary" href="#/shop">Shop the drop</a></div>
+  </section>`;
+  document.getElementById("member-signin")?.addEventListener("click", () => signInModal());
+}
+
 async function activeOrderStrip() {
   if (!store.profile) return "";
   const orders = await api.myOrders(store.profile.id);
@@ -252,7 +298,7 @@ async function pageHome() {
   const marquee = Array(8).fill("PRINTED TO ORDER ✦ AFTER DARK ONLY ✦ ").join("");
   app.innerHTML = `${hero()}<div id="strip"></div>
     <div class="marquee mono" aria-hidden="true"><div>${marquee}</div></div>
-    ${trustStrip()}
+    ${trustStrip()}${memberStrip()}
     <section class="section"><div class="head"><span class="mono kicker">Drop 01</span><h2>The first ten.</h2><a class="more" href="#/shop">See all</a></div>${grid(featured)}</section>
     ${pre.length ? `<section class="section"><div class="head"><span class="mono kicker">Pre-Launch</span><h2>Early-access graphics.</h2><a class="more" href="#/shop">See all</a></div>${grid(pre)}</section>` : ""}
     ${lookbook()}${pricing()}${howItWorks()}`;
@@ -417,10 +463,14 @@ async function pageCheckout() {
   if (!lines.length) return pageBag();
   if (!store.profile) return needSignIn("Sign in to finish your order. Your bag is saved.");
   const openedAt = location.hash;
-  const previous = (await api.myOrders(store.profile.id).catch(() => []))[0] || {};
+  const [pastOrders, membership] = await Promise.all([api.myOrders(store.profile.id).catch(() => []), api.membership().catch(() => null)]);
+  const previous = pastOrders[0] || {};
   if (location.hash !== openedAt) return;
+  const memberTier = membership?.tier || null;
+  const memberPct = memberTier?.discount_pct || 0;
+  const memberSaving = memberSavingFor(lines, memberPct);
   let coupon = null;
-  let options = paymentOptions(lines);
+  let options = paymentOptions(lines, 0, memberPct);
   const optionsHtml = (selected) => `<legend>How would you like to pay?</legend>
     ${options.map((o, i) => `<label class="pay-opt"><input type="radio" name="payment" value="${o.id}" ${(selected ? o.id === selected : !i) ? "checked" : ""}><span><strong>${esc(o.title)}</strong><small class="muted">${esc(o.note)}</small></span></label>`).join("") || '<p class="error">Payments are unavailable right now. Please contact us.</p>'}`;
   const field = (name, label, value, attrs = "") => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(value)}" required ${attrs}></label>`;
@@ -458,7 +508,7 @@ async function pageCheckout() {
     const o = chosen();
     if (!o) return;
     const box = document.getElementById("pay-sum");
-    box.innerHTML = `<dl class="sum"><dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>${o.coupon ? `<dt>Coupon ${esc(coupon.code)}</dt><dd>-${money(o.coupon)}</dd>` : ""}<dt>Shipping</dt><dd>${o.shipping ? money(o.shipping) : "Free"}</dd>
+    box.innerHTML = `<dl class="sum"><dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>${o.coupon ? `<dt>Coupon ${esc(coupon.code)}</dt><dd>-${money(o.coupon)}</dd>` : ""}${o.member ? `<dt>${esc(memberTier.name)} member discount</dt><dd>-${money(o.member)}</dd>` : ""}<dt>Shipping</dt><dd>${o.shipping ? money(o.shipping) : "Free"}</dd>
       ${o.discount ? `<dt>UPI discount</dt><dd>-${money(o.discount)}</dd>` : ""}
       <dt class="t">Total</dt><dd class="t">${money(o.total)}</dd>
       <dt>Pay now by UPI</dt><dd>${money(o.now)}</dd><dt>Pay at delivery</dt><dd>${money(o.total - o.now)}</dd></dl>`;
@@ -471,7 +521,7 @@ async function pageCheckout() {
   const setCoupon = (next, message, bad) => {
     const selected = form.elements.payment?.value;
     coupon = next;
-    options = paymentOptions(lines, coupon?.discount || 0);
+    options = paymentOptions(lines, coupon?.discount || 0, memberPct);
     document.getElementById("pay-opts").innerHTML = optionsHtml(selected);
     couponInput.readOnly = Boolean(coupon);
     couponButton.textContent = coupon ? "Remove" : "Apply";
@@ -490,7 +540,11 @@ async function pageCheckout() {
     couponButton.disabled = true;
     try {
       const result = await api.checkCoupon(code, lines.map((l) => ({ product_id: l.product_id, size: l.size, quantity: l.quantity })));
-      setCoupon({ code: result.code, discount: result.discount }, `${result.code} applied. You save ${money(result.discount)}.`);
+      if (memberSaving && result.discount <= memberSaving) {
+        setCoupon(null, `Your ${memberTier.name} discount saves you more, so we've kept that. ${result.code} stays unused.`);
+      } else {
+        setCoupon({ code: result.code, discount: result.discount }, `${result.code} applied. You save ${money(result.discount)}${memberSaving ? ` instead of your ${memberTier.name} discount` : ""}.`);
+      }
     } catch (error) {
       setCoupon(null, error.message, true);
     }
@@ -537,10 +591,16 @@ async function pageCheckout() {
   });
 }
 
-function paymentOptions(lines, couponDiscount = 0) {
+const memberSavingFor = (lines, pct) => {
+  const { subtotal } = totals(lines);
+  return Math.max(Math.min(Math.floor(subtotal * pct / 100), subtotal - 1), 0);
+};
+
+function paymentOptions(lines, couponDiscount = 0, memberPct = 0) {
   const s = store.settings;
   const { subtotal } = totals(lines);
-  const net = subtotal - couponDiscount;
+  const memberSaving = couponDiscount > memberSavingFor(lines, memberPct) ? 0 : memberSavingFor(lines, memberPct);
+  const net = subtotal - couponDiscount - memberSaving;
   const shipping = net >= s.free_shipping_over ? 0 : s.shipping_inr;
   const full = net + shipping;
   const options = [];
@@ -551,7 +611,7 @@ function paymentOptions(lines, couponDiscount = 0) {
     options.push({ id: "advance", title: `Pay ${money(advance)} advance by UPI`, note: `Pay ${money(full - advance)} in cash at delivery.`, discount: 0, total: full, now: advance });
   }
   if (hasCod()) options.push({ id: "cod", title: "Cash on delivery", note: "Pay the full amount when it arrives.", discount: 0, total: full, now: 0 });
-  return options.map((o) => ({ ...o, subtotal, shipping, coupon: couponDiscount }));
+  return options.map((o) => ({ ...o, subtotal, shipping, coupon: couponDiscount, member: memberSaving }));
 }
 
 async function pagePay(orderId) {
@@ -670,6 +730,7 @@ async function pageOrders() {
       ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
         ${o.status === "delivered" && i.product_id ? `<button class="btn small" data-review="${esc(i.product_id)}" data-name="${esc(i.name)}">${mine.has(i.product_id) ? `Edit your review (${mine.get(i.product_id).rating}★)` : "Write a review"}</button>` : ""}`).join("")}
       ${o.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(o.coupon_code)}</span><span>-${money(o.coupon_discount_inr)}</span></p>` : ""}
+      ${o.member_tier ? `<p class="row-between small"><span>${esc(o.member_tier)} member discount</span><span>-${money(o.member_discount_inr)}</span></p>` : ""}
       <p class="row-between total"><span>Total</span><strong>${money(o.total_inr)}</strong></p>
       <div class="pay-line"><span class="pay-state ${esc(o.payment_status)}">${PAYMENT[o.payment_status]}</span>
         ${o.amount_due_now ? `<span class="muted small">UPI ${money(o.amount_due_now)}${paidLater(o) && !["rejected", "cancelled"].includes(o.status) ? `, then ${money(paidLater(o))} at delivery` : ""}</span>` : ""}
@@ -782,6 +843,7 @@ async function route() {
       else if (page === "checkout") await pageCheckout();
       else if (page === "orders") await pageOrders();
       else if (page === "help") await pageHelp();
+      else if (page === "membership") await pageMembership();
       else if (page === "pay") await pagePay(arg);
       else notFound();
     } catch (error) {
@@ -802,7 +864,7 @@ async function updateActiveOrders() {
 }
 
 async function refresh() {
-  [store.products, store.settings, store.reviews] = await Promise.all([api.products(), api.settings(), api.reviews().catch(() => [])]);
+  [store.products, store.settings, store.reviews, store.tiers] = await Promise.all([api.products(), api.settings(), api.reviews().catch(() => []), api.tiers().catch(() => [])]);
 }
 
 function welcome() {

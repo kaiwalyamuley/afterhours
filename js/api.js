@@ -156,6 +156,20 @@ async function liveApi() {
       }
       return unwrap(await db.from("products").insert(values).select("id").single()).id;
     },
+    async tiers() {
+      return unwrap(await db.from("membership_tiers").select("*").order("min_orders"));
+    },
+    async membership() {
+      return unwrap(await db.rpc("my_membership"));
+    },
+    async saveTier({ id, ...values }) {
+      values.updated_at = new Date().toISOString();
+      if (id) unwrap(await db.from("membership_tiers").update(values).eq("id", id));
+      else unwrap(await db.from("membership_tiers").insert(values));
+    },
+    async deleteTier(id) {
+      unwrap(await db.from("membership_tiers").delete().eq("id", id));
+    },
     async costs() {
       return unwrap(await db.from("business_costs").select("costs,confirmed").eq("id", 1).single());
     },

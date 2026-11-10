@@ -2,6 +2,7 @@ import { api } from "./api.js";
 import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
 import { drawAnalytics, drawMargin, attachPriceHelp } from "./analytics.js";
+import { drawMembers } from "./members.js";
 import { countUp } from "./motion.js";
 
 export async function pendingCount() {
@@ -69,6 +70,7 @@ function orderCard(order) {
       ${order.cancel_reason ? `<p class="reason-note">${order.status === "cancelled" ? "Customer's reason" : "Declined"}: ${esc(order.cancel_reason)}</p>` : ""}
     </div>
     ${order.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(order.coupon_code)}</span><span>-${money(order.coupon_discount_inr)}</span></p>` : ""}
+    ${order.member_tier ? `<p class="row-between small"><span>${esc(order.member_tier)} member discount</span><span>-${money(order.member_discount_inr)}</span></p>` : ""}
     <p class="row-between total"><span>Total</span><strong>${money(order.total_inr)}</strong></p>
     ${paymentBox(order)}
     <div class="row">${order.status === "printing" && !order.tracking_no ? `<button class="btn small primary" data-ship="${esc(order.id)}">Ship with Shiprocket</button>` : ""}${(NEXT[order.status] || []).filter(([status]) => status !== "accepted" || canAccept(order)).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
@@ -650,6 +652,7 @@ export const consoleTabs = (access) => [
   ["coupons", "Coupons", access.products, "tag"],
   ["reports", "Analytics", access.owner, "chart"],
   ["margin", "Margin", access.owner, "calc"],
+  ["members", "Members", access.owner, "crown"],
   ["settings", "Store info", access.settings, "settings"],
   ["team", "Team", access.owner, "team"],
 ].filter(([, , allowed]) => allowed);
@@ -677,5 +680,6 @@ export async function renderOwner(app, tab, ctx) {
   else if (active === "coupons") await drawCoupons(body);
   else if (active === "reports") await drawAnalytics(body, ctx);
   else if (active === "margin") await drawMargin(body, ctx);
+  else if (active === "members") await drawMembers(body, ctx);
   else drawOrders(body, orders, ctx);
 }

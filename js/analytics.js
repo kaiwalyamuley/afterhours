@@ -300,6 +300,7 @@ export async function drawAnalytics(body, ctx) {
         ${panelTable("Payment type", tally(a.sold, (o) => paymentNames[o.payment_method]).map(([k, n]) => [k, `${n} order${n === 1 ? "" : "s"}`]), "No orders in this period.")}
         ${panelTable("Busiest days", weekdays.map(([k, n]) => [k, `${n} order${n === 1 ? "" : "s"}`]), "No orders in this period.")}
         ${panelTable("Why orders were lost", tally(a.lost, (o) => o.cancel_reason || "No reason recorded").map(([k, n]) => [k, String(n)]), "No lost orders in this period.")}
+        ${panelTable("Member discounts", tally(a.sold, (o) => o.member_tier, (o) => o.member_discount_inr).map(([k, n]) => [k, `${whole(n)} given`]), "No member discounts in this period.")}
         ${panelTable("Coupons", tally(a.sold, (o) => o.coupon_code, (o) => o.coupon_discount_inr).map(([k, n]) => [k, `${whole(n)} given`]), "No coupons used in this period.")}
       </div>
       <p class="muted small">Profit is estimated from your Margin tab costs, counts only accepted orders, and uses your average courier cost rather than each real courier charge. Visitor numbers and conversion rate aren't tracked yet.</p>`;
