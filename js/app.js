@@ -1,5 +1,5 @@
 import { api, DEMO } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, GOOGLE_ICON } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART } from "./ui.js";
 import { pageSwap, reveal, bindTilt, flyToBag, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
 import { mountSide, drawSide, sideToggle } from "./side.js";
 import { CUSTOMER_REASONS, SUPPORT_TOPICS } from "./reasons.js";
@@ -287,7 +287,7 @@ function pageProduct(slug) {
       <p class="lead">${esc(p.tagline)}</p>
       <p class="price big">${money(p.price_inr)}${p.compare_at_inr > p.price_inr ? ` <s>${money(p.compare_at_inr)}</s>` : ""}</p>
       <p class="muted">${esc(p.description)}</p>
-      ${live ? `<span class="mono label">Size</span>
+      ${live ? `<div class="size-head"><span class="mono label">Size</span><button type="button" class="size-guide" id="size-guide">Size guide</button></div>
       <div class="sizes">${p.sizes.map((s, i) => `<button class="size ${i === 1 ? "on" : ""}" data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>
       <div class="row"><button class="btn primary" id="add">Add to bag</button><button class="btn" id="buy">Buy now</button></div>`
       : `<p class="notice mono">Coming soon</p>`}
@@ -312,11 +312,28 @@ function pageProduct(slug) {
     size = b.dataset.s;
     app.querySelectorAll("[data-s]").forEach((x) => x.classList.toggle("on", x === b));
   }));
+  document.getElementById("size-guide")?.addEventListener("click", () => showSizeGuide(size));
   document.getElementById("add")?.addEventListener("click", () => {
     addToBag(p.id, size);
     flyToBag(stage.firstElementChild);
   });
   document.getElementById("buy")?.addEventListener("click", () => { addToBag(p.id, size); location.hash = "#/checkout"; });
+}
+
+function showSizeGuide(selected) {
+  const chart = store.settings.size_chart || DEFAULT_SIZE_CHART;
+  const cm = (inches) => Math.round(Number(inches) * 2.54);
+  openModal(`<h2>Size guide</h2>
+    <p class="muted small">Tee measurements in inches, with centimetres in brackets. Allow up to 1 inch of variation.</p>
+    <div class="size-table-wrap"><table class="size-table">
+      <thead><tr><th>Size</th><th>Fits chest</th><th>Tee chest</th><th>Length</th><th>Shoulder</th></tr></thead>
+      <tbody>${chart.map((r) => `<tr class="${r.size === selected ? "on" : ""}"><th>${esc(r.size)}</th><td>${esc(r.fits)}</td><td>${esc(r.chest)} <small>(${cm(r.chest)})</small></td><td>${esc(r.length)} <small>(${cm(r.length)})</small></td><td>${esc(r.shoulder)} <small>(${cm(r.shoulder)})</small></td></tr>`).join("")}</tbody>
+    </table></div>
+    <ul class="assure">
+      <li>Fits chest is your body measurement around the fullest part of your chest.</li>
+      <li>Tee chest is the measurement around the tee, just below the arms.</li>
+      <li>Between two sizes? Choose the larger one for a relaxed fit.</li>
+    </ul>`);
 }
 
 function summary(lines) {
@@ -566,6 +583,7 @@ function faq() {
     ["How do I pay?", hasUpi() && hasCod() ? "By UPI when you order, with a small advance, or in cash when your tee arrives." : hasUpi() ? "By UPI when you order. We confirm your payment before printing." : "Cash on delivery. You pay the delivery partner when your tee arrives, and there is nothing to pay online."],
     ...(hasUpi() ? [["What if my order is declined after I pay?", "We refund your UPI payment."]] : []),
     ["When is my tee printed?", "Each tee is printed after we accept your order, so it is made just for you."],
+    ["How do I choose my size?", "Open the Size guide on any product page and match your chest measurement. If you are between two sizes, choose the larger one for a relaxed fit."],
     ["Can I cancel my order?", `Yes, from your orders page, until we accept it. After that printing begins${s.support_phone || s.support_email ? ", so please contact us quickly" : ""}.`],
     ["How do I follow my order?", "Sign in and open My orders. You will see each stage, and a tracking number once it is dispatched."],
     ["What does shipping cost?", `${shippingText()}.`],

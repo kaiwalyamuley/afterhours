@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
 import { countUp } from "./motion.js";
 
@@ -308,6 +308,7 @@ function drawProducts(body, ctx) {
 
 function drawSettings(body, ctx) {
   const s = ctx.store.settings;
+  const chart = s.size_chart || DEFAULT_SIZE_CHART;
   const text = (name, label, hint = "") => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(s[name] || "")}" placeholder="${esc(hint)}"></label>`;
   body.innerHTML = `<form id="settings" class="panel form store-form">
     <h3>Shipping</h3>
@@ -339,6 +340,14 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Discount for paying in full (%)</span><input name="prepaid_discount_pct" type="number" min="0" max="50" step="1" required value="${s.prepaid_discount_pct ?? 0}"></label>
     </div>
     <label class="check"><input type="checkbox" name="cod_enabled" ${s.cod_enabled !== false ? "checked" : ""}><span><strong>Offer full cash on delivery</strong><small class="muted">Turn off to require full or advance UPI payment. Needs a UPI ID.</small></span></label>
+    <h3>Size chart</h3>
+    <p class="muted small">Replace these with real measurements from your blank tees, in inches.</p>
+    <div class="size-table-wrap"><table class="size-table size-edit">
+      <thead><tr><th>Size</th><th>Fits chest</th><th>Tee chest</th><th>Length</th><th>Shoulder</th></tr></thead>
+      <tbody>${chart.map((r, i) => `<tr><th>${esc(r.size)}</th>
+        <td><input name="sc_${i}_fits" aria-label="${esc(r.size)} fits chest" required maxlength="12" value="${esc(r.fits)}"></td>
+        ${["chest", "length", "shoulder"].map((f) => `<td><input name="sc_${i}_${f}" aria-label="${esc(r.size)} ${f}" type="number" min="1" max="99" step="0.5" required value="${esc(r[f])}"></td>`).join("")}</tr>`).join("")}</tbody>
+    </table></div>
     <h3>Helpline</h3>
     <p class="muted small">These appear publicly on the Help page and side menu. Blank items stay hidden.</p>
     <div class="cols">${text("support_phone", "Helpline and WhatsApp number", "10-digit mobile number")}${text("support_email", "Support email", "help@yourbrand.com")}</div>
@@ -386,12 +395,14 @@ function drawSettings(body, ctx) {
       return;
     }
     try {
-      const values = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
+      const values = Object.fromEntries(Object.entries(data).filter(([key]) => !key.startsWith("sc_")).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
+      const sizeChart = chart.map((r, i) => ({ size: r.size, fits: data[`sc_${i}_fits`].trim(), chest: Number(data[`sc_${i}_chest`]), length: Number(data[`sc_${i}_length`]), shoulder: Number(data[`sc_${i}_shoulder`]) }));
       let qrUrl = removeQr ? "" : (s.upi_qr_url || "");
       if (qrFile?.size) qrUrl = await api.upload(qrFile, "upi-qr");
       await api.saveSettings({
         ...values,
         upi_qr_url: qrUrl,
+        size_chart: sizeChart,
         upi_payee: values.upi_payee || "AfterHours",
         cod_enabled: Boolean(data.cod_enabled),
         parcel_weight_kg: Number(data.parcel_weight_kg),

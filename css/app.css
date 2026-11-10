@@ -205,6 +205,17 @@ input[type=file] { padding: 8px; }
 .member { display: grid; gap: 12px; }
 .member-email { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 820px) { .team { grid-template-columns: 1fr; } }
+/* size guide */
+.size-head { display: flex; align-items: baseline; justify-content: space-between; }
+.size-guide { background: none; border: 0; padding: 0; color: var(--orange); text-decoration: underline; cursor: pointer; font-size: 14px; }
+.size-table-wrap { overflow-x: auto; }
+.size-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.size-table th, .size-table td { padding: 8px 6px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.size-table thead th { color: var(--muted); font: 600 12px var(--mono); }
+.size-table small { color: var(--muted); }
+.size-table tr.on { background: var(--orange-soft); }
+.size-edit input { min-width: 70px; min-height: 36px; padding: 6px 8px; }
+
 /* courier booking */
 .couriers { display: grid; gap: 8px; margin-top: 12px; }
 .courier { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
