@@ -221,6 +221,7 @@ input[type=file] { padding: 8px; }
 .member-rules { display: grid; gap: 8px; margin: 18px 0 0; padding-left: 20px; }
 .member-strip { color: inherit; }
 .member-cta { margin-top: 20px; }
+.member-status p + .btn { margin-top: 14px; }
 
 /* margin and analytics */
 .notice-box { padding: 12px 14px; margin-bottom: 14px; border: 1px solid var(--orange); border-radius: 10px; background: var(--orange-soft); font-size: 14px; }
