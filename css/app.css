@@ -205,6 +205,16 @@ input[type=file] { padding: 8px; }
 .member { display: grid; gap: 12px; }
 .member-email { min-width: 0; overflow-wrap: anywhere; }
 @media (max-width: 820px) { .team { grid-template-columns: 1fr; } }
+/* coupons and reports */
+.coupon-row { display: flex; align-items: flex-end; gap: 8px; }
+.coupon-row .field { flex: 1; min-width: 0; }
+.coupon-good { color: var(--good); }
+.report-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; margin-bottom: 14px; }
+.rank-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 14px; }
+.rank-table th { text-align: left; font-weight: 500; padding: 6px 8px 6px 0; overflow-wrap: anywhere; }
+.rank-table td { text-align: right; color: var(--muted); padding: 6px 0; white-space: nowrap; font-family: var(--mono); font-size: 13px; }
+.rank-table tr + tr th, .rank-table tr + tr td { border-top: 1px solid var(--line); }
+
 /* gallery and reviews */
 .stage { aspect-ratio: 6 / 7; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .stage .tee { width: 100%; }

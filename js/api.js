@@ -71,9 +71,25 @@ async function liveApi() {
     async saveSettings(values) {
       unwrap(await db.from("store_settings").update({ ...values, updated_at: new Date().toISOString() }).eq("id", 1));
     },
-    async placeOrder(items, address, note, payment) {
-      const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment }));
+    async placeOrder(items, address, note, payment, coupon) {
+      const rows = unwrap(await db.rpc("place_order", { p_items: items, p_address: address, p_note: note, p_payment: payment, p_coupon: coupon || "" }));
       return rows[0];
+    },
+    async checkCoupon(code, items) {
+      const rows = unwrap(await db.rpc("check_coupon", { p_code: code, p_items: items }));
+      return rows[0];
+    },
+    async coupons() {
+      return unwrap(await db.from("coupons").select("*").order("created_at", { ascending: false }));
+    },
+    async addCoupon(values) {
+      unwrap(await db.from("coupons").insert(values));
+    },
+    async updateCoupon(id, values) {
+      unwrap(await db.from("coupons").update(values).eq("id", id));
+    },
+    async reportOrders() {
+      return unwrap(await db.from("orders").select(orderSelect).order("created_at", { ascending: false }).limit(5000));
     },
     async reviews() {
       return unwrap(await db.from("product_reviews").select("id,product_id,rating,comment,reviewer_name,created_at").eq("status", "published").order("created_at", { ascending: false }).limit(1000));

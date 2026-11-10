@@ -419,7 +419,10 @@ async function pageCheckout() {
   const openedAt = location.hash;
   const previous = (await api.myOrders(store.profile.id).catch(() => []))[0] || {};
   if (location.hash !== openedAt) return;
-  const options = paymentOptions(lines);
+  let coupon = null;
+  let options = paymentOptions(lines);
+  const optionsHtml = (selected) => `<legend>How would you like to pay?</legend>
+    ${options.map((o, i) => `<label class="pay-opt"><input type="radio" name="payment" value="${o.id}" ${(selected ? o.id === selected : !i) ? "checked" : ""}><span><strong>${esc(o.title)}</strong><small class="muted">${esc(o.note)}</small></span></label>`).join("") || '<p class="error">Payments are unavailable right now. Please contact us.</p>'}`;
   const field = (name, label, value, attrs = "") => `<label class="field"><span>${label}</span><input name="${name}" value="${esc(value)}" required ${attrs}></label>`;
   app.innerHTML = `<section class="section first two">
     <form id="checkout" class="panel form" novalidate>
@@ -430,9 +433,12 @@ async function pageCheckout() {
       <div class="cols">${field("city", "City", previous.city || "", 'autocomplete="address-level2"')}${field("state", "State", previous.state || "", 'autocomplete="address-level1"')}</div>
       ${field("pincode", "PIN code", previous.pincode || "", 'inputmode="numeric" maxlength="6" autocomplete="postal-code"')}
       <label class="field"><span>Note (optional)</span><input name="note" maxlength="300"></label>
-      <fieldset class="pay-opts"><legend>How would you like to pay?</legend>
-        ${options.map((o, i) => `<label class="pay-opt"><input type="radio" name="payment" value="${o.id}" ${i ? "" : "checked"}><span><strong>${esc(o.title)}</strong><small class="muted">${esc(o.note)}</small></span></label>`).join("") || '<p class="error">Payments are unavailable right now. Please contact us.</p>'}
-      </fieldset>
+      <div class="coupon-row">
+        <label class="field"><span>Coupon code (optional)</span><input id="coupon-code" maxlength="20" autocomplete="off" autocapitalize="characters"></label>
+        <button type="button" class="btn" id="coupon-apply">Apply</button>
+      </div>
+      <p class="small" id="coupon-msg" hidden></p>
+      <fieldset class="pay-opts" id="pay-opts">${optionsHtml()}</fieldset>
       <p class="error" id="form-error" hidden></p>
       <button class="btn primary wide" id="place">Place order</button>
     </form>
@@ -451,15 +457,45 @@ async function pageCheckout() {
   const showSum = () => {
     const o = chosen();
     if (!o) return;
-    const { subtotal, shipping } = totals(lines);
     const box = document.getElementById("pay-sum");
-    box.innerHTML = `<dl class="sum"><dt>Subtotal</dt><dd>${money(subtotal)}</dd><dt>Shipping</dt><dd>${shipping ? money(shipping) : "Free"}</dd>
+    box.innerHTML = `<dl class="sum"><dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>${o.coupon ? `<dt>Coupon ${esc(coupon.code)}</dt><dd>-${money(o.coupon)}</dd>` : ""}<dt>Shipping</dt><dd>${o.shipping ? money(o.shipping) : "Free"}</dd>
       ${o.discount ? `<dt>UPI discount</dt><dd>-${money(o.discount)}</dd>` : ""}
       <dt class="t">Total</dt><dd class="t">${money(o.total)}</dd>
       <dt>Pay now by UPI</dt><dd>${money(o.now)}</dd><dt>Pay at delivery</dt><dd>${money(o.total - o.now)}</dd></dl>`;
   };
   showSum();
   form.addEventListener("change", (event) => { if (event.target.name === "payment") showSum(); });
+  const couponInput = document.getElementById("coupon-code");
+  const couponButton = document.getElementById("coupon-apply");
+  const couponMessage = document.getElementById("coupon-msg");
+  const setCoupon = (next, message, bad) => {
+    const selected = form.elements.payment?.value;
+    coupon = next;
+    options = paymentOptions(lines, coupon?.discount || 0);
+    document.getElementById("pay-opts").innerHTML = optionsHtml(selected);
+    couponInput.readOnly = Boolean(coupon);
+    couponButton.textContent = coupon ? "Remove" : "Apply";
+    couponMessage.textContent = message || "";
+    couponMessage.hidden = !message;
+    couponMessage.className = `small ${bad ? "error" : "coupon-good"}`;
+    showSum();
+  };
+  couponButton.addEventListener("click", async () => {
+    if (coupon) {
+      couponInput.value = "";
+      return setCoupon(null);
+    }
+    const code = couponInput.value.trim();
+    if (!code) return setCoupon(null, "Enter a coupon code first.", true);
+    couponButton.disabled = true;
+    try {
+      const result = await api.checkCoupon(code, lines.map((l) => ({ product_id: l.product_id, size: l.size, quantity: l.quantity })));
+      setCoupon({ code: result.code, discount: result.discount }, `${result.code} applied. You save ${money(result.discount)}.`);
+    } catch (error) {
+      setCoupon(null, error.message, true);
+    }
+    couponButton.disabled = false;
+  });
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(form));
@@ -482,6 +518,7 @@ async function pageCheckout() {
         { name: values.name.trim(), phone, line: values.line.trim(), city: values.city.trim(), state: values.state.trim(), pincode: values.pincode.trim() },
         values.note.trim(),
         chosen().id,
+        coupon?.code || "",
       );
       bag = [];
       writeBag();
@@ -500,19 +537,21 @@ async function pageCheckout() {
   });
 }
 
-function paymentOptions(lines) {
+function paymentOptions(lines, couponDiscount = 0) {
   const s = store.settings;
-  const { subtotal, shipping } = totals(lines);
-  const full = subtotal + shipping;
+  const { subtotal } = totals(lines);
+  const net = subtotal - couponDiscount;
+  const shipping = net >= s.free_shipping_over ? 0 : s.shipping_inr;
+  const full = net + shipping;
   const options = [];
   if (hasUpi()) {
-    const discount = Math.floor(subtotal * (s.prepaid_discount_pct || 0) / 100);
+    const discount = Math.floor(net * (s.prepaid_discount_pct || 0) / 100);
     options.push({ id: "prepaid", title: "Pay in full by UPI", note: discount ? `Save ${money(discount)}. Nothing to pay at delivery.` : "Nothing to pay at delivery.", discount, total: full - discount, now: full - discount });
     const advance = Math.min(s.advance_inr || 99, full);
     options.push({ id: "advance", title: `Pay ${money(advance)} advance by UPI`, note: `Pay ${money(full - advance)} in cash at delivery.`, discount: 0, total: full, now: advance });
   }
   if (hasCod()) options.push({ id: "cod", title: "Cash on delivery", note: "Pay the full amount when it arrives.", discount: 0, total: full, now: 0 });
-  return options;
+  return options.map((o) => ({ ...o, subtotal, shipping, coupon: couponDiscount }));
 }
 
 async function pagePay(orderId) {
@@ -630,6 +669,7 @@ async function pageOrders() {
       ${timeline(o.status)}
       ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
         ${o.status === "delivered" && i.product_id ? `<button class="btn small" data-review="${esc(i.product_id)}" data-name="${esc(i.name)}">${mine.has(i.product_id) ? `Edit your review (${mine.get(i.product_id).rating}★)` : "Write a review"}</button>` : ""}`).join("")}
+      ${o.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(o.coupon_code)}</span><span>-${money(o.coupon_discount_inr)}</span></p>` : ""}
       <p class="row-between total"><span>Total</span><strong>${money(o.total_inr)}</strong></p>
       <div class="pay-line"><span class="pay-state ${esc(o.payment_status)}">${PAYMENT[o.payment_status]}</span>
         ${o.amount_due_now ? `<span class="muted small">UPI ${money(o.amount_due_now)}${paidLater(o) && !["rejected", "cancelled"].includes(o.status) ? `, then ${money(paidLater(o))} at delivery` : ""}</span>` : ""}
