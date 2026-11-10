@@ -291,15 +291,15 @@ async function activeOrderStrip() {
 }
 
 async function pageHome() {
-  const live = visible();
-  const featured = live.filter((p) => p.collection === "Drop 01").slice(0, 4);
-  const pre = live.filter((p) => p.collection === "Pre-Launch").slice(0, 4);
+  // Newest collection first, each one showing up to four tees.
+  const latestSort = (name) => Math.max(...visible().filter((p) => p.collection === name).map((p) => p.sort));
+  const collections = [...new Set(visible().map((p) => p.collection))].sort((a, b) => latestSort(b) - latestSort(a)).slice(0, 3);
+  const collectionRows = collections.map((name) => `<section class="section"><div class="head"><span class="mono kicker">Collection</span><h2>${esc(name)}</h2><a class="more" href="#/shop/${encodeURIComponent(name)}">See all</a></div>${grid(visible().filter((p) => p.collection === name).slice(0, 4))}</section>`).join("");
   const marquee = Array(8).fill("PRINTED TO ORDER ✦ AFTER DARK ONLY ✦ ").join("");
   app.innerHTML = `${hero()}<div id="strip"></div>
     <div class="marquee mono" aria-hidden="true"><div>${marquee}</div></div>
     ${trustStrip()}${memberStrip()}
-    <section class="section"><div class="head"><span class="mono kicker">Drop 01</span><h2>The first ten.</h2><a class="more" href="#/shop">See all</a></div>${grid(featured)}</section>
-    ${pre.length ? `<section class="section"><div class="head"><span class="mono kicker">Pre-Launch</span><h2>Early-access graphics.</h2><a class="more" href="#/shop">See all</a></div>${grid(pre)}</section>` : ""}
+    ${collectionRows}
     ${lookbook()}${pricing()}${howItWorks()}`;
   document.getElementById("hero-signin")?.addEventListener("click", () => signInModal());
   autoScroll(app.querySelector(".lookbook"));

@@ -90,7 +90,7 @@ function drawPhotos(area, items, limit, onChange) {
 }
 
 export function productForm(product, ctx) {
-  const p = product || { name: "", tagline: "", description: "", collection: "Drop 01", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live", gender: "unisex", colors: [{ name: "Black", hex: "#000000" }] };
+  const p = product || { name: "", tagline: "", description: "", collection: ctx.store.products[ctx.store.products.length - 1]?.collection || "", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live", gender: "unisex", colors: [{ name: "Black", hex: "#000000" }] };
   const collections = [...new Set(ctx.store.products.map((x) => x.collection))];
   const sizeChoices = [...new Set([...SIZE_OPTIONS, ...p.sizes])];
   const state = {
