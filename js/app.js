@@ -2,6 +2,7 @@ import { api, DEMO } from "./api.js";
 import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART } from "./ui.js";
 import { calm, pageSwap, reveal, bindTilt, flyToBag, autoScroll, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
 import { mountSide, drawSide, sideToggle } from "./side.js";
+import { homeLayout } from "./home-layout.js";
 import { CUSTOMER_REASONS, SUPPORT_TOPICS } from "./reasons.js";
 
 const app = document.getElementById("app");
@@ -215,10 +216,13 @@ function howItWorks() {
 }
 
 /* ---------- pages ---------- */
-function hero() {
-  const pick = store.products.find((p) => p.slug === "neon-tokyo" && p.status !== "hidden") || visible()[0];
-  const copy = !store.profile
-    ? { kicker: "Streetwear for the late shift", title: "Made for<br><span>after dark.</span>", body: "Graphic tees printed the moment you order. No warehouse, no leftovers.",
+const PREVIEW = new URLSearchParams(location.search).has("preview");
+
+function hero(layout) {
+  const newest = [...visible()].sort((a, b) => b.sort - a.sort)[0];
+  const pick = visible().find((p) => p.slug === layout.product) || newest;
+  const copy = !store.profile || PREVIEW
+    ? { kicker: esc(layout.kicker), title: `${esc(layout.line1)}<br><span>${esc(layout.line2)}</span>`, body: esc(layout.text),
         cta: `<button class="btn primary" id="hero-signin">Sign in to order</button><a class="btn" href="#/shop">Browse the drop</a>` }
     : { kicker: "You're clocked in", title: `Welcome back,<br><span>${esc(firstName())}.</span>`, body: "The latest drop is below, and your orders are one tap away.",
         cta: `<a class="btn primary" href="#/shop">Shop the drop</a><a class="btn" href="#/orders">Track orders</a>` };
@@ -291,18 +295,28 @@ async function activeOrderStrip() {
 }
 
 async function pageHome() {
-  // Newest collection first, each one showing up to four tees.
+  const layout = homeLayout(store.settings.home_layout);
+  // The owner's chosen collections, or the newest three, each showing up to four tees.
   const latestSort = (name) => Math.max(...visible().filter((p) => p.collection === name).map((p) => p.sort));
-  const collections = [...new Set(visible().map((p) => p.collection))].sort((a, b) => latestSort(b) - latestSort(a)).slice(0, 3);
+  const newestFirst = [...new Set(visible().map((p) => p.collection))].sort((a, b) => latestSort(b) - latestSort(a));
+  const chosen = newestFirst.filter((name) => layout.collections.includes(name));
+  const collections = chosen.length ? chosen : newestFirst.slice(0, 3);
   const collectionRows = collections.map((name) => `<section class="section"><div class="head"><span class="mono kicker">Collection</span><h2>${esc(name)}</h2><a class="more" href="#/shop/${encodeURIComponent(name)}">See all</a></div>${grid(visible().filter((p) => p.collection === name).slice(0, 4))}</section>`).join("");
   const marquee = Array(8).fill("PRINTED TO ORDER ✦ AFTER DARK ONLY ✦ ").join("");
-  app.innerHTML = `${hero()}<div id="strip"></div>
-    <div class="marquee mono" aria-hidden="true"><div>${marquee}</div></div>
-    ${trustStrip()}${memberStrip()}
-    ${collectionRows}
-    ${lookbook()}${pricing()}${howItWorks()}`;
+  const parts = {
+    marquee: () => `<div class="marquee mono" aria-hidden="true"><div>${marquee}</div></div>`,
+    trust: trustStrip,
+    member: memberStrip,
+    collections: () => collectionRows,
+    lookbook,
+    pricing,
+    how: howItWorks,
+  };
+  app.innerHTML = `${layout.banner.on && layout.banner.text ? `<p class="announce">${esc(layout.banner.text)}</p>` : ""}${hero(layout.hero)}<div id="strip"></div>
+    ${layout.sections.filter((s) => s.on).map((s) => parts[s.id]()).join("")}`;
   document.getElementById("hero-signin")?.addEventListener("click", () => signInModal());
-  autoScroll(app.querySelector(".lookbook"));
+  const lookbookStrip = app.querySelector(".lookbook");
+  if (lookbookStrip) autoScroll(lookbookStrip);
   const strip = await activeOrderStrip().catch(() => "");
   const slot = document.getElementById("strip");
   if (slot) slot.innerHTML = strip;

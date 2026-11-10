@@ -2,7 +2,8 @@ import { api } from "./api.js";
 import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
 import { drawAnalytics, drawMargin } from "./analytics.js";
-import { productForm } from "./product-form.js";
+import { drawProducts } from "./products-manager.js";
+import { drawPages } from "./pages.js";
 import { drawMembers } from "./members.js";
 
 export async function pendingCount() {
@@ -182,52 +183,6 @@ function drawOrders(body, orders, ctx) {
   }));
 }
 
-function drawProducts(body, ctx) {
-  const { products } = ctx.store;
-  body.innerHTML = `<div class="row-between toolbar"><p class="muted">${products.length} products. Prices save as soon as you leave the box.</p><button class="btn small primary" id="new">Add product</button></div>
-  <div class="ptable">${products.map((p) => `<div class="prow" data-id="${esc(p.id)}">
-    <div class="thumb">${tee(p, "back", false, p.colors?.[0]?.hex)}</div>
-    <div class="grow"><h3>${esc(p.name)}</h3><p class="mono muted">${esc(p.collection)}</p></div>
-    <label class="inline"><span class="sr">Price of ${esc(p.name)}</span>₹<input class="price-input" type="number" min="1" step="1" value="${p.price_inr}"></label>
-    <select class="status-input" aria-label="Visibility of ${esc(p.name)}">${[["live", "Live"], ["coming_soon", "Coming soon"], ["hidden", "Hidden"]].map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}</select>
-    <div class="row-actions"><button class="btn small edit">Edit</button>${ctx.store.profile.access.owner ? '<button class="btn small danger delete">Delete</button>' : ""}</div>
-  </div>`).join("")}</div>`;
-  body.querySelector("#new").addEventListener("click", () => productForm(null, ctx));
-  body.querySelectorAll(".prow").forEach((row) => {
-    const product = products.find((p) => p.id === row.dataset.id);
-    const save = async (patch, message) => {
-      try {
-        await api.saveProduct({ id: product.id, ...patch });
-        Object.assign(product, patch);
-        toast(message);
-      } catch (error) {
-        toast(error.message, "bad");
-      }
-    };
-    row.querySelector(".edit").addEventListener("click", () => productForm(product, ctx));
-    row.querySelector(".delete")?.addEventListener("click", async () => {
-      if (!confirm(`Delete ${product.name} permanently? It will disappear from the shop. Past orders keep their details. This cannot be undone.`)) return;
-      try {
-        await api.deleteProduct(product.id);
-        toast(`${product.name} deleted`);
-        await ctx.refresh();
-        await ctx.redraw();
-      } catch (error) {
-        toast(error.message, "bad");
-      }
-    });
-    row.querySelector(".price-input").addEventListener("change", (event) => {
-      const price = Number(event.target.value);
-      if (!Number.isInteger(price) || price < 1) {
-        event.target.value = product.price_inr;
-        return toast("Price must be a whole number of rupees", "bad");
-      }
-      save({ price_inr: price }, `${product.name} is now ${money(price)}`);
-    });
-    row.querySelector(".status-input").addEventListener("change", (event) => save({ status: event.target.value }, `${product.name} updated`));
-  });
-}
-
 function drawSettings(body, ctx) {
   const s = ctx.store.settings;
   const chart = s.size_chart || DEFAULT_SIZE_CHART;
@@ -270,13 +225,6 @@ function drawSettings(body, ctx) {
         <td><input name="sc_${i}_fits" aria-label="${esc(r.size)} fits chest" required maxlength="12" value="${esc(r.fits)}"></td>
         ${["chest", "length", "shoulder"].map((f) => `<td><input name="sc_${i}_${f}" aria-label="${esc(r.size)} ${f}" type="number" min="1" max="99" step="0.5" required value="${esc(r[f])}"></td>`).join("")}</tr>`).join("")}</tbody>
     </table></div>
-    <h3>Helpline</h3>
-    <p class="muted small">These appear publicly on the Help page and side menu. Blank items stay hidden.</p>
-    <div class="cols">${text("support_phone", "Helpline and WhatsApp number", "10-digit mobile number")}${text("support_email", "Support email", "help@yourbrand.com")}</div>
-    <div class="cols">${text("support_hours", "Support hours", "Example: Mon to Sat, 10 am to 7 pm")}${text("instagram_url", "Instagram link", "https://instagram.com/yourpage")}</div>
-    <h3>Trust details</h3>
-    <label class="field"><span>Business address</span><textarea name="business_address" rows="2" maxlength="300" placeholder="Shown as seller details on the Help page and footer">${esc(s.business_address || "")}</textarea></label>
-    <label class="field"><span>Return and exchange policy</span><textarea name="return_policy" rows="4" maxlength="1200" placeholder="Example: Damaged or wrongly printed tees are replaced if you contact us within 3 days of delivery.">${esc(s.return_policy || "")}</textarea></label>
     <p class="error" id="settings-error" hidden></p>
     <button class="btn primary wide">Save store info</button></form>`;
   body.querySelector("#connect-alerts")?.addEventListener("click", async (event) => {
@@ -295,16 +243,6 @@ function drawSettings(body, ctx) {
     const { upi_qr_file: qrFile, remove_upi_qr: removeQr, ...data } = Object.fromEntries(new FormData(event.target));
     const box = body.querySelector("#settings-error");
     box.hidden = true;
-    if (data.instagram_url && !data.instagram_url.startsWith("https://")) {
-      box.textContent = "The Instagram link must start with https://";
-      box.hidden = false;
-      return;
-    }
-    if (data.support_phone && !/^(\+?91)?[6-9][0-9]{9}$/.test(data.support_phone.replace(/[\s-]/g, ""))) {
-      box.textContent = "Please enter a valid 10-digit helpline number.";
-      box.hidden = false;
-      return;
-    }
     const upi = data.upi_id.trim();
     if (upi && !/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/.test(upi)) {
       box.textContent = "Please enter a valid UPI ID, for example yourbrand@okaxis.";
@@ -528,6 +466,7 @@ async function drawCoupons(body) {
 export const consoleTabs = (access) => [
   ["orders", "Orders", access.orders, "orders"],
   ["products", "Products", access.products, "shop"],
+  ["pages", "Pages", access.settings, "home"],
   ["help", "Help desk", access.orders, "chat"],
   ["reviews", "Reviews", access.products, "star"],
   ["coupons", "Coupons", access.products, "tag"],
@@ -550,7 +489,8 @@ export async function renderOwner(app, tab, ctx) {
     <div id="owner-body"></div>
   </section>`;
   const body = document.getElementById("owner-body");
-  if (active === "products") drawProducts(body, ctx);
+  if (active === "products") await drawProducts(body, ctx);
+  else if (active === "pages") drawPages(body, ctx);
   else if (active === "settings") drawSettings(body, ctx);
   else if (active === "team") await drawTeam(body, ctx);
   else if (active === "help") await drawHelpDesk(body, ctx);

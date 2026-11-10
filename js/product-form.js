@@ -5,13 +5,13 @@ import { attachPriceHelp } from "./analytics.js";
 
 const COLOR_HEX = /^#[0-9A-Fa-f]{6}$/;
 const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
-const GRAPHIC_TYPES = [...PHOTO_TYPES, "image/svg+xml"];
+export const GRAPHIC_TYPES = [...PHOTO_TYPES, "image/svg+xml"];
 const MAX_FILE = 15 * 1024 * 1024;
 const MAX_COLORS = 12;
 const MAX_COLOR_PHOTOS = 6;
 const MAX_SHARED_PHOTOS = 12;
 const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
-const QUICK_COLORS = [["Black", "#000000"], ["White", "#FFFFFF"], ["Navy", "#1B2A4A"], ["Charcoal", "#36454F"], ["Maroon", "#800000"], ["Olive", "#556B2F"], ["Beige", "#D8C9A8"]];
+export const QUICK_COLORS = [["Black", "#000000"], ["White", "#FFFFFF"], ["Navy", "#1B2A4A"], ["Charcoal", "#36454F"], ["Maroon", "#800000"], ["Olive", "#556B2F"], ["Beige", "#D8C9A8"]];
 const STEPS = [
   ["Details", "What is this tee, and who is it for?"],
   ["Price", "Set what customers pay. We suggest a price from your costs."],
@@ -20,11 +20,11 @@ const STEPS = [
   ["Review", "Check everything, then save."],
 ];
 
-const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+export const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 const field = (key, label, control, hint = "") => `<div class="field pf-field"><label for="pf-${key}">${label}</label>${control}${hint ? `<small class="muted">${hint}</small>` : ""}<small class="pf-err" data-err="${key}" hidden></small></div>`;
 
-const segments = (name, options, value, label) => `<div class="seg" role="radiogroup" aria-label="${label}">${options.map(([v, text]) => `<label><input type="radio" name="${name}" value="${v}" ${v === value ? "checked" : ""}><span>${text}</span></label>`).join("")}</div>`;
+export const segments = (name, options, value, label) => `<div class="seg" role="radiogroup" aria-label="${label}">${options.map(([v, text]) => `<label><input type="radio" name="${name}" value="${v}" ${v === value ? "checked" : ""}><span>${text}</span></label>`).join("")}</div>`;
 
 function normalizeHex(value) {
   const text = value.trim().toUpperCase();
@@ -32,7 +32,7 @@ function normalizeHex(value) {
 }
 
 /** Keeps only files the store can use, and explains the ones it can't. */
-function usableFiles(files, types, room) {
+export function usableFiles(files, types, room) {
   const list = [];
   for (const file of files) {
     if (!types.includes(file.type)) toast(`${file.name} must be ${types.includes("image/svg+xml") ? "a PNG, JPG, WebP or SVG" : "a PNG, JPG or WebP"} image`, "bad");
@@ -43,10 +43,10 @@ function usableFiles(files, types, room) {
   return list.slice(0, Math.max(room, 0));
 }
 
-const asItem = (file) => ({ src: URL.createObjectURL(file), file });
+export const asItem = (file) => ({ src: URL.createObjectURL(file), file });
 
 /** Turns an element into a place to click or drop files. */
-function bindDrop(zone, onFiles) {
+export function bindDrop(zone, onFiles) {
   zone.addEventListener("dragover", (event) => {
     event.preventDefault();
     zone.classList.add("over");
