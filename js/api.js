@@ -150,8 +150,25 @@ async function liveApi() {
     },
     async saveProduct({ id, ...values }) {
       values.updated_at = new Date().toISOString();
-      if (id) unwrap(await db.from("products").update(values).eq("id", id));
-      else unwrap(await db.from("products").insert(values));
+      if (id) {
+        unwrap(await db.from("products").update(values).eq("id", id));
+        return id;
+      }
+      return unwrap(await db.from("products").insert(values).select("id").single()).id;
+    },
+    async costs() {
+      return unwrap(await db.from("business_costs").select("costs,confirmed").eq("id", 1).single());
+    },
+    async saveCosts(costs) {
+      unwrap(await db.from("business_costs").update({ costs, confirmed: true, updated_at: new Date().toISOString() }).eq("id", 1));
+    },
+    async productCosts() {
+      const rows = unwrap(await db.from("product_costs").select("product_id,cost_inr"));
+      return new Map(rows.map((r) => [r.product_id, r.cost_inr]));
+    },
+    async saveProductCost(productId, cost) {
+      if (cost === null) unwrap(await db.from("product_costs").delete().eq("product_id", productId));
+      else unwrap(await db.from("product_costs").upsert({ product_id: productId, cost_inr: cost, updated_at: new Date().toISOString() }));
     },
     async upload(file, slug) {
       const ext = UPLOAD_TYPES[file.type];

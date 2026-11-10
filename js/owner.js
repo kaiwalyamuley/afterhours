@@ -1,6 +1,7 @@
 import { api } from "./api.js";
 import { esc, money, when, toast, openModal, pickReason, tee, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
+import { drawAnalytics, drawMargin, attachPriceHelp } from "./analytics.js";
 import { countUp } from "./motion.js";
 
 export async function pendingCount() {
@@ -203,6 +204,8 @@ function productForm(product, ctx) {
         <label class="field"><span>Price (₹)</span><input name="price_inr" type="number" min="1" step="1" required value="${p.price_inr}"></label>
         <label class="field"><span>Was price (₹, optional)</span><input name="compare_at_inr" type="number" min="1" step="1" value="${p.compare_at_inr ?? ""}"></label>
       </div>
+      <label class="field"><span>This tee's cost (₹, optional). Leave blank to use your Margin tab costs.</span><input name="product_cost" type="number" min="0" step="1"></label>
+      <div class="price-help" id="price-help"><p class="muted small">Working out a suggested price...</p></div>
       <div class="cols">
         <label class="field"><span>Collection</span><input name="collection" required maxlength="40" value="${esc(p.collection)}"></label>
         <label class="field"><span>Visibility</span><select name="status">
@@ -239,6 +242,7 @@ function productForm(product, ctx) {
     };
     drawGallery();
     filesInput.addEventListener("change", updateCount);
+    const readProductCost = attachPriceHelp(modal, product);
     modal.querySelector("#product").addEventListener("submit", async (event) => {
       event.preventDefault();
       const data = new FormData(event.target);
@@ -279,7 +283,9 @@ function productForm(product, ctx) {
         }
         values.gallery = [...kept, ...uploaded];
         button.textContent = "Saving";
-        await api.saveProduct(values);
+        const savedId = await api.saveProduct(values);
+        const productCost = (await readProductCost)();
+        if (productCost !== undefined) await api.saveProductCost(savedId, productCost);
         close();
         toast("Product saved");
         await ctx.refresh();
@@ -350,7 +356,6 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Free shipping over (₹)</span><input name="free_shipping_over" type="number" min="0" step="1" required value="${s.free_shipping_over}"></label>
     </div>
     ${text("delivery_note", "Delivery time, shown to customers", "Example: Delivered in 5 to 7 working days")}
-    <label class="field"><span>Your cost per tee (₹), for the sales report: blank, printing and packing</span><input name="cost_per_tee_inr" type="number" min="0" step="1" required value="${s.cost_per_tee_inr ?? 0}"></label>
     <h3>Parcel for Shiprocket</h3>
     ${text("pickup_location", "Default pickup location name", "Leave blank to use your primary Shiprocket location")}
     <div class="cols">
@@ -439,7 +444,6 @@ function drawSettings(body, ctx) {
         size_chart: sizeChart,
         upi_payee: values.upi_payee || "AfterHours",
         cod_enabled: Boolean(data.cod_enabled),
-        cost_per_tee_inr: Number(data.cost_per_tee_inr),
         parcel_weight_kg: Number(data.parcel_weight_kg),
         parcel_length_cm: Number(data.parcel_length_cm),
         parcel_breadth_cm: Number(data.parcel_breadth_cm),
@@ -638,66 +642,14 @@ async function drawCoupons(body) {
   }));
 }
 
-async function drawReports(body, ctx) {
-  const allOrders = await api.reportOrders();
-  const cost = Number(ctx.store.settings.cost_per_tee_inr || 0);
-  const periods = [[7, "7 days"], [30, "30 days"], [90, "90 days"], [0, "All time"]];
-  const rankTable = (title, rows, emptyText) => `<section class="panel"><h3>${title}</h3>${rows.length
-    ? `<table class="rank-table"><tbody>${rows.map(([label, value]) => `<tr><th>${esc(label)}</th><td>${esc(value)}</td></tr>`).join("")}</tbody></table>`
-    : `<p class="muted small">${emptyText}</p>`}</section>`;
-  const tally = (list, keyOf, amountOf = () => 1) => {
-    const map = new Map();
-    list.forEach((item) => {
-      const key = keyOf(item);
-      if (key) map.set(key, (map.get(key) || 0) + amountOf(item));
-    });
-    return [...map.entries()].sort((a, b) => b[1] - a[1]);
-  };
-  const paymentNames = { cod: "Cash on delivery", prepaid: "Full UPI", advance: "UPI advance" };
-  const draw = (days) => {
-    const since = days ? Date.now() - days * 86400000 : 0;
-    const orders = allOrders.filter((o) => new Date(o.created_at).getTime() >= since);
-    const closed = (o) => ["rejected", "cancelled"].includes(o.status);
-    const sold = orders.filter((o) => !closed(o));
-    const lost = orders.filter(closed);
-    const items = sold.flatMap((o) => o.order_items);
-    const units = items.reduce((sum, i) => sum + i.quantity, 0);
-    const value = sold.reduce((sum, o) => sum + o.total_inr, 0);
-    const goods = sold.reduce((sum, o) => sum + o.total_inr - o.shipping_inr, 0);
-    const refused = orders.filter((o) => /RTO|RETURN|UNDELIVERED/i.test(o.shipping_status || "")).length;
-    const tiles = [
-      ["Order value", money(value)],
-      ["Orders", sold.length],
-      ["Tees sold", units],
-      ["Average order", sold.length ? money(Math.round(value / sold.length)) : "₹0"],
-      ["Delivered", orders.filter((o) => o.status === "delivered").length],
-      ["Cancelled or declined", lost.length],
-      ["Refused or returned", refused],
-      ...(cost ? [["Margin before courier", money(goods - cost * units)]] : []),
-    ];
-    body.innerHTML = `<div class="chips">${periods.map(([d, label]) => `<button class="chip ${d === days ? "on" : ""}" data-days="${d}">${label}</button>`).join("")}</div>
-      <div class="stats">${tiles.map(([label, tile]) => `<div class="stat"><span class="mono muted">${label}</span><strong>${tile}</strong></div>`).join("")}</div>
-      ${cost ? "" : '<p class="muted small">Add your cost per tee under Store info to see your margin here.</p>'}
-      <div class="report-grid">
-        ${rankTable("Best sellers", tally(items, (i) => i.name, (i) => i.quantity).slice(0, 10).map(([k, n]) => [k, `${n} sold`]), "No sales in this period.")}
-        ${rankTable("Sizes sold", tally(items, (i) => i.size, (i) => i.quantity).map(([k, n]) => [k, `${n} sold`]), "No sales in this period.")}
-        ${rankTable("Payment type", tally(sold, (o) => paymentNames[o.payment_method]).map(([k, n]) => [k, `${n} order${n === 1 ? "" : "s"}`]), "No orders in this period.")}
-        ${rankTable("Why orders were lost", tally(lost, (o) => o.cancel_reason || "No reason recorded").map(([k, n]) => [k, String(n)]), "No lost orders in this period.")}
-        ${rankTable("Coupons used", tally(sold, (o) => o.coupon_code, (o) => o.coupon_discount_inr).map(([k, n]) => [k, `${money(n)} given`]), "No coupons used in this period.")}
-      </div>
-      <p class="muted small">Order value includes shipping charged to customers and excludes cancelled or declined orders. Margin subtracts your cost per tee, but not courier charges or refused parcels.</p>`;
-    body.querySelectorAll("[data-days]").forEach((b) => b.addEventListener("click", () => draw(Number(b.dataset.days))));
-  };
-  draw(30);
-}
-
 export const consoleTabs = (access) => [
   ["orders", "Orders", access.orders, "orders"],
   ["products", "Products", access.products, "tag"],
   ["help", "Help desk", access.orders, "chat"],
   ["reviews", "Reviews", access.products, "star"],
   ["coupons", "Coupons", access.products, "tag"],
-  ["reports", "Sales report", access.owner, "chart"],
+  ["reports", "Analytics", access.owner, "chart"],
+  ["margin", "Margin", access.owner, "calc"],
   ["settings", "Store info", access.settings, "settings"],
   ["team", "Team", access.owner, "team"],
 ].filter(([, , allowed]) => allowed);
@@ -723,6 +675,7 @@ export async function renderOwner(app, tab, ctx) {
   else if (active === "help") await drawHelpDesk(body, ctx);
   else if (active === "reviews") await drawReviews(body, ctx);
   else if (active === "coupons") await drawCoupons(body);
-  else if (active === "reports") await drawReports(body, ctx);
+  else if (active === "reports") await drawAnalytics(body, ctx);
+  else if (active === "margin") await drawMargin(body, ctx);
   else drawOrders(body, orders, ctx);
 }
