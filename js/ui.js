@@ -32,21 +32,22 @@ export function pickReason(title, detail, reasons) {
   });
 }
 
-export function openModal(html, onReady, onClose) {
+export function openModal(html, onReady, onClose, { className = "", canClose } = {}) {
   const root = document.getElementById("modal-root");
-  root.innerHTML = `<div class="modal-back"><div class="modal" role="dialog" aria-modal="true">
+  root.innerHTML = `<div class="modal-back"><div class="modal ${className}" role="dialog" aria-modal="true">
     <button class="modal-x" aria-label="Close" data-close>×</button>${html}</div></div>`;
   const close = () => {
     root.innerHTML = "";
     document.removeEventListener("keydown", onKey);
     onClose?.();
   };
-  const onKey = (e) => { if (e.key === "Escape") close(); };
+  const tryClose = () => { if (!canClose || canClose()) close(); };
+  const onKey = (e) => { if (e.key === "Escape") tryClose(); };
   document.addEventListener("keydown", onKey);
   root.querySelector(".modal-back").addEventListener("mousedown", (e) => {
-    if (e.target.classList.contains("modal-back")) close();
+    if (e.target.classList.contains("modal-back")) tryClose();
   });
-  root.querySelector("[data-close]").addEventListener("click", close);
+  root.querySelector("[data-close]").addEventListener("click", tryClose);
   onReady?.(root.querySelector(".modal"), close);
   return close;
 }

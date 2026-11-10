@@ -126,7 +126,7 @@ export async function attachPriceHelp(modal, product) {
       ${record.confirmed ? "" : '<p class="muted small">Based partly on starter estimates. Update your costs in the Margin tab.</p>'}`;
     area.querySelectorAll("[data-use]").forEach((button) => button.addEventListener("click", () => {
       priceInput.value = button.dataset.use;
-      draw();
+      priceInput.dispatchEvent(new Event("input", { bubbles: true }));
     }));
   };
   draw();

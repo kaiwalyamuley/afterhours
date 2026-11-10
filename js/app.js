@@ -329,9 +329,11 @@ function pageProduct(slug) {
   if (!p) return notFound();
   const colors = p.colors || [];
   let color = colors[0] || null;
-  const slides = [{ side: "back", label: "Back" }, { side: "front", label: "Front" }];
-  if (p.model_image) slides.push({ src: p.model_image, label: "On model" });
-  (p.gallery || []).forEach((src, i) => slides.push({ src, label: `Photo ${i + 1}` }));
+  const fixedSlides = [{ side: "back", label: "Back" }, { side: "front", label: "Front" }];
+  if (p.model_image) fixedSlides.push({ src: p.model_image, label: "On model" });
+  (p.gallery || []).forEach((src, i) => fixedSlides.push({ src, label: `Photo ${i + 1}` }));
+  const slidesFor = (c) => [...(c?.images || []).map((src, i) => ({ src, label: `${c.name} photo ${i + 1}` })), ...fixedSlides];
+  let slides = slidesFor(color);
   const slideView = (s) => (s.src ? `<img class="model" src="${esc(s.src)}" alt="${esc(p.name)}: ${esc(s.label)}">` : tee(p, s.side, true, color?.hex));
   const thumbView = (s) => (s.src ? `<img src="${esc(s.src)}" alt="" loading="lazy">` : tee(p, s.side, false, color?.hex));
   const reviews = reviewsFor(p.id);
@@ -339,7 +341,7 @@ function pageProduct(slug) {
   app.innerHTML = `<section class="section first pdp">
     <div class="gallery">
       <div class="stage" id="stage">${slideView(slides[0])}</div>
-      <div class="thumbs" id="thumbs">${slides.map((s, i) => `<button class="thumb-btn ${i ? "" : "on"}" data-slide="${i}" aria-label="Show ${esc(s.label)}" title="${esc(s.label)}">${thumbView(s)}</button>`).join("")}</div>
+      <div class="thumbs" id="thumbs"></div>
     </div>
     <div class="buy">
       <span class="mono kicker">${esc(p.collection)}</span>
@@ -380,10 +382,16 @@ function pageProduct(slug) {
       if (i === index) thumbs.scrollTo({ left: b.offsetLeft - (thumbs.clientWidth - b.offsetWidth) / 2, behavior: calm ? "auto" : "smooth" });
     });
   };
-  thumbs.querySelectorAll("[data-slide]").forEach((b) => b.addEventListener("click", () => {
+  const drawThumbs = () => {
+    thumbs.innerHTML = slides.map((s, i) => `<button class="thumb-btn ${i === current ? "on" : ""}" data-slide="${i}" aria-label="Show ${esc(s.label)}" title="${esc(s.label)}">${thumbView(s)}</button>`).join("");
+  };
+  drawThumbs();
+  thumbs.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-slide]");
+    if (!button) return;
     holdUntil = Date.now() + 10000;
-    showSlide(Number(b.dataset.slide));
-  }));
+    showSlide(Number(button.dataset.slide));
+  });
   document.getElementById("rating-link")?.addEventListener("click", (event) => {
     event.preventDefault();
     document.getElementById("reviews-section").scrollIntoView({ behavior: calm ? "auto" : "smooth" });
@@ -412,9 +420,11 @@ function pageProduct(slug) {
       x.setAttribute("aria-pressed", String(x === b));
     });
     document.getElementById("color-name").textContent = color.name;
-    thumbs.querySelectorAll("[data-slide]").forEach((t, i) => { if (!slides[i].src) t.innerHTML = thumbView(slides[i]); });
+    slides = slidesFor(color);
+    current = 0;
+    drawThumbs();
     holdUntil = Date.now() + 10000;
-    showSlide(slides[current].src ? 0 : current);
+    showSlide(0);
   }));
   document.getElementById("size-guide")?.addEventListener("click", () => showSizeGuide(size));
   document.getElementById("add")?.addEventListener("click", () => {
@@ -454,7 +464,7 @@ function pageBag() {
   app.innerHTML = `<section class="section first two">
     <div><div class="head"><h2>Your bag</h2></div>
       ${lines.map((l) => `<div class="line" data-p="${esc(l.product_id)}" data-s="${esc(l.size)}" data-c="${esc(l.color || "")}">
-        <div class="thumb">${tee(l.product, "back", false, l.choice?.hex)}</div>
+        <div class="thumb">${l.choice?.images?.[0] ? `<img src="${esc(l.choice.images[0])}" alt="">` : tee(l.product, "back", false, l.choice?.hex)}</div>
         <div class="grow"><h3>${esc(l.product.name)}</h3><p class="mono muted">Size ${esc(l.size)}</p>${colorTag(l.choice?.name, l.choice?.hex)}<p class="price">${money(l.product.price_inr)}</p></div>
         <div class="qty"><button aria-label="Fewer" data-d="-1">−</button><span>${l.quantity}</span><button aria-label="More" data-d="1">+</button></div>
       </div>`).join("")}

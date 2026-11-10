@@ -1,7 +1,8 @@
 import { api } from "./api.js";
 import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
-import { drawAnalytics, drawMargin, attachPriceHelp } from "./analytics.js";
+import { drawAnalytics, drawMargin } from "./analytics.js";
+import { productForm } from "./product-form.js";
 import { drawMembers } from "./members.js";
 
 export async function pendingCount() {
@@ -179,149 +180,6 @@ function drawOrders(body, orders, ctx) {
       toast(error.message, "bad");
     }
   }));
-}
-
-const COLOR_HEX = /^#[0-9A-Fa-f]{6}$/;
-const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-
-function productForm(product, ctx) {
-  const p = product || { name: "", tagline: "", description: "", collection: "Drop 01", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live", gender: "unisex", colors: [{ name: "Black", hex: "#000000" }] };
-  const upload = (name, label, current) => `<label class="field"><span>${label}${current ? " (replace)" : ""}</span><input type="file" name="${name}" accept="image/png,image/jpeg,image/webp,image/svg+xml"></label>`;
-  openModal(`<h2>${product ? "Edit product" : "New product"}</h2>
-    <form id="product" class="form">
-      <label class="field"><span>Name</span><input name="name" required maxlength="80" value="${esc(p.name)}"></label>
-      <label class="field"><span>Tagline</span><input name="tagline" maxlength="120" value="${esc(p.tagline)}"></label>
-      <label class="field"><span>Description</span><textarea name="description" rows="3" maxlength="600">${esc(p.description)}</textarea></label>
-      <div class="cols">
-        <label class="field"><span>Price (₹)</span><input name="price_inr" type="number" min="1" step="1" required value="${p.price_inr}"></label>
-        <label class="field"><span>Was price (₹, optional)</span><input name="compare_at_inr" type="number" min="1" step="1" value="${p.compare_at_inr ?? ""}"></label>
-      </div>
-      <label class="field"><span>This tee's cost (₹, optional). Leave blank to use your Margin tab costs.</span><input name="product_cost" type="number" min="0" step="1"></label>
-      <div class="price-help" id="price-help"><p class="muted small">Working out a suggested price...</p></div>
-      <div class="cols">
-        <label class="field"><span>Collection</span><input name="collection" required maxlength="40" value="${esc(p.collection)}"></label>
-        <label class="field"><span>Visibility</span><select name="status">
-          ${[["live", "Live"], ["coming_soon", "Coming soon"], ["hidden", "Hidden"]].map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}
-        </select></label>
-      </div>
-      <div class="cols">
-        <label class="field"><span>For</span><select name="gender">
-          ${[["unisex", "Both"], ["male", "Male"], ["female", "Female"]].map(([v, l]) => `<option value="${v}" ${(p.gender || "unisex") === v ? "selected" : ""}>${l}</option>`).join("")}
-        </select></label>
-        <label class="field"><span>Sizes, separated by commas</span><input name="sizes" required value="${esc(p.sizes.join(", "))}"></label>
-      </div>
-      <div class="field"><span>Tee colours, with exact hex codes</span>
-        <div class="color-list" id="color-list"></div>
-        <button type="button" class="btn small" id="add-color">Add colour</button>
-      </div>
-      ${upload("back", "Back graphic (transparent PNG works best)", p.print_back)}
-      ${upload("front", "Front graphic", p.print_front)}
-      <div class="field"><span>Product photos (up to 12)</span>
-        <div class="gallery-edit" id="gallery-edit"></div>
-        <input type="file" id="gallery-files" name="gallery_files" multiple accept="image/png,image/jpeg,image/webp">
-        <small class="muted" id="gallery-count"></small>
-      </div>
-      <p class="error" id="product-error" hidden></p>
-      <button class="btn primary wide" id="save">Save product</button>
-    </form>`, (modal, close) => {
-    let kept = [...new Set([p.model_image, ...(p.gallery || [])].filter(Boolean))];
-    const colorList = modal.querySelector("#color-list");
-    const addColor = (color = { name: "", hex: "#FFFFFF" }) => {
-      const row = document.createElement("div");
-      row.className = "color-row";
-      row.innerHTML = `<input type="color" aria-label="Pick a colour" value="${esc(color.hex.toLowerCase())}">
-        <input class="color-hex" maxlength="7" aria-label="Hex code" placeholder="#000000" value="${esc(color.hex.toUpperCase())}">
-        <input class="color-name" maxlength="24" aria-label="Colour name" placeholder="Colour name" value="${esc(color.name)}">
-        <button type="button" aria-label="Remove colour">×</button>`;
-      const [picker, hex] = row.querySelectorAll("input");
-      picker.addEventListener("input", () => { hex.value = picker.value.toUpperCase(); });
-      hex.addEventListener("input", () => { if (COLOR_HEX.test(hex.value)) picker.value = hex.value.toLowerCase(); });
-      row.querySelector("button").addEventListener("click", () => row.remove());
-      colorList.append(row);
-    };
-    (p.colors || []).forEach(addColor);
-    modal.querySelector("#add-color").addEventListener("click", () => {
-      if (colorList.children.length >= 12) return toast("You can add up to 12 colours", "bad");
-      addColor();
-      colorList.lastElementChild.querySelector(".color-name").focus();
-    });
-    const readColors = () => [...colorList.children].map((row) => ({ name: row.querySelector(".color-name").value.trim(), hex: row.querySelector(".color-hex").value.trim().toUpperCase() }));
-    const filesInput = modal.querySelector("#gallery-files");
-    const newCount = () => filesInput.files.length;
-    const updateCount = () => {
-      const total = kept.length + newCount();
-      modal.querySelector("#gallery-count").textContent = `${total} of 12 photos${total > 12 ? ". Please remove some." : ""}`;
-    };
-    const drawGallery = () => {
-      const area = modal.querySelector("#gallery-edit");
-      area.innerHTML = kept.map((src, i) => `<div class="gallery-thumb"><img src="${esc(src)}" alt="Product photo ${i + 1}"><button type="button" aria-label="Remove photo ${i + 1}" data-remove="${i}">×</button></div>`).join("");
-      area.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => {
-        kept.splice(Number(b.dataset.remove), 1);
-        drawGallery();
-      }));
-      updateCount();
-    };
-    drawGallery();
-    filesInput.addEventListener("change", updateCount);
-    const readProductCost = attachPriceHelp(modal, product);
-    modal.querySelector("#product").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const data = new FormData(event.target);
-      const errorBox = modal.querySelector("#product-error");
-      const button = modal.querySelector("#save");
-      const price = Number(data.get("price_inr"));
-      const compare = data.get("compare_at_inr") ? Number(data.get("compare_at_inr")) : null;
-      const sizes = String(data.get("sizes")).split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
-      const fail = (message) => { errorBox.textContent = message; errorBox.hidden = false; };
-      if (!Number.isInteger(price) || price < 1) return fail("Price must be a whole number of rupees.");
-      if (!sizes.length) return fail("Add at least one size.");
-      const colors = readColors();
-      if (colors.some((c) => !c.name)) return fail("Give every colour a name.");
-      if (colors.some((c) => !COLOR_HEX.test(c.hex))) return fail("Each colour needs a hex code like #1B2A4A.");
-      if (new Set(colors.map((c) => c.hex)).size !== colors.length) return fail("Each colour needs a different hex code.");
-      const galleryFiles = [...filesInput.files];
-      if (kept.length + galleryFiles.length > 12) return fail("You can add up to 12 product photos.");
-      if (!product && !data.get("back").size) return fail("A new product needs a back graphic.");
-      button.disabled = true;
-      button.textContent = "Saving";
-      try {
-        const slug = p.slug || `${slugify(String(data.get("name")))}-${Date.now().toString(36)}`;
-        const values = {
-          name: String(data.get("name")).trim(), tagline: String(data.get("tagline")).trim(), description: String(data.get("description")).trim(),
-          collection: String(data.get("collection")).trim(), price_inr: price, compare_at_inr: compare, status: data.get("status"), sizes, slug, gender: data.get("gender"), colors,
-        };
-        if (product) values.id = product.id;
-        else values.sort = Math.max(0, ...ctx.store.products.map((x) => x.sort)) + 10;
-        for (const side of ["back", "front"]) {
-          const file = data.get(side);
-          if (file.size) {
-            const url = await api.upload(file, slug);
-            values[`print_${side}`] = url;
-            values[`print_file_${side}`] = url;
-          }
-        }
-        const uploaded = [];
-        for (const [index, file] of galleryFiles.entries()) {
-          button.textContent = `Uploading photo ${index + 1} of ${galleryFiles.length}`;
-          uploaded.push(await api.upload(file, slug));
-        }
-        values.gallery = [...kept, ...uploaded];
-        values.model_image = null;
-        button.textContent = "Saving";
-        const savedId = await api.saveProduct(values);
-        const productCost = (await readProductCost)();
-        if (productCost !== undefined) await api.saveProductCost(savedId, productCost);
-        close();
-        toast("Product saved");
-        await ctx.refresh();
-        await ctx.redraw();
-      } catch (error) {
-        fail(error.message);
-        button.disabled = false;
-        button.textContent = "Save product";
-      }
-    });
-  });
 }
 
 function drawProducts(body, ctx) {
