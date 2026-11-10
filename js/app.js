@@ -468,14 +468,17 @@ async function pagePay(orderId) {
     return;
   }
   const s = store.settings;
-  const link = `upi://pay?pa=${encodeURIComponent(s.upi_id)}&pn=${encodeURIComponent(s.upi_payee || "AfterHours")}&am=${order.amount_due_now.toFixed(2)}&cu=INR&tn=${encodeURIComponent(order.order_no)}`;
+  // UPI apps reject many QR codes that encode the @ or lock an amount for a
+  // regular UPI ID, so this holds only the payee and the customer types the amount.
+  const link = `upi://pay?pa=${s.upi_id}&pn=${encodeURIComponent(s.upi_payee || "AfterHours")}&cu=INR`;
   app.innerHTML = `<section class="section first two">
     <div class="panel pay-card">
       <span class="mono kicker">Order ${esc(order.order_no)}</span>
       <p class="pay-amount">${money(order.amount_due_now)}</p>
       ${order.payment_status === "failed" ? '<p class="error">We could not find your last payment. Please pay again, or contact us if money left your account.</p>' : ""}
-      <div class="qr" id="qr"></div>
-      <p class="muted small">Scan with any UPI app. On your phone, you can tap the button below.</p>
+      <div class="qr" id="qr">${s.upi_qr_url ? `<img src="${esc(s.upi_qr_url)}" alt="UPI QR code for AfterHours">` : ""}</div>
+      <p class="pay-exact">Scan, then enter exactly <strong>${money(order.amount_due_now)}</strong></p>
+      <p class="muted small">Add ${esc(order.order_no)} in the payment note if your app allows it.</p>
       <a class="btn primary wide phone-only" href="${esc(link)}">Open UPI app</a>
       <div class="upi-copy"><span class="muted small">UPI ID</span><code>${esc(s.upi_id)}</code><button type="button" class="btn small" id="copy-upi">Copy</button></div>
     </div>
@@ -489,7 +492,7 @@ async function pagePay(orderId) {
       <ul class="assure"><li>We check every payment before printing your tee.</li><li>If we decline your order, we refund your payment.</li></ul>
     </form>
   </section>`;
-  try {
+  if (!s.upi_qr_url) try {
     const { default: qrcode } = await import("https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm");
     const code = qrcode(0, "M");
     code.addData(link);

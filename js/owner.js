@@ -272,6 +272,8 @@ function drawSettings(body, ctx) {
     <h3>Payments</h3>
     <p class="muted small">Add a UPI ID to offer full and advance UPI payment. Customers will see it, so avoid an ID that contains your personal mobile number.</p>
     <div class="cols">${text("upi_id", "UPI ID", "yourbrand@okaxis")}${text("upi_payee", "Name shown in UPI apps", "AfterHours")}</div>
+    <label class="field"><span>Your UPI QR image (recommended). Use the QR from your UPI or bank app.</span><input type="file" name="upi_qr_file" accept="image/png,image/jpeg,image/webp"></label>
+    ${s.upi_qr_url ? `<div class="qr-current"><div class="qr"><img src="${esc(s.upi_qr_url)}" alt="Current UPI QR code"></div><label class="check"><input type="checkbox" name="remove_upi_qr"><span><strong>Remove this QR image</strong></span></label></div>` : ""}
     <div class="cols">
       <label class="field"><span>Advance amount (₹)</span><input name="advance_inr" type="number" min="1" step="1" required value="${s.advance_inr ?? 99}"></label>
       <label class="field"><span>Discount for paying in full (%)</span><input name="prepaid_discount_pct" type="number" min="0" max="50" step="1" required value="${s.prepaid_discount_pct ?? 0}"></label>
@@ -288,7 +290,7 @@ function drawSettings(body, ctx) {
     <button class="btn primary wide">Save store info</button></form>`;
   body.querySelector("#settings").addEventListener("submit", async (event) => {
     event.preventDefault();
-    const data = Object.fromEntries(new FormData(event.target));
+    const { upi_qr_file: qrFile, remove_upi_qr: removeQr, ...data } = Object.fromEntries(new FormData(event.target));
     const box = body.querySelector("#settings-error");
     box.hidden = true;
     if (data.instagram_url && !data.instagram_url.startsWith("https://")) {
@@ -314,8 +316,11 @@ function drawSettings(body, ctx) {
     }
     try {
       const values = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, typeof value === "string" ? value.trim() : value]));
+      let qrUrl = removeQr ? "" : (s.upi_qr_url || "");
+      if (qrFile?.size) qrUrl = await api.upload(qrFile, "upi-qr");
       await api.saveSettings({
         ...values,
+        upi_qr_url: qrUrl,
         upi_payee: values.upi_payee || "AfterHours",
         cod_enabled: Boolean(data.cod_enabled),
         advance_inr: Number(data.advance_inr),

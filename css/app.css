@@ -216,7 +216,10 @@ input[type=file] { padding: 8px; }
 .pay-card { display: grid; justify-items: center; gap: 12px; text-align: center; }
 .pay-amount { font: 400 56px/1 var(--display); }
 .qr { width: min(100%, 240px); padding: 10px; background: #fff; border-radius: 12px; }
-.qr svg { display: block; width: 100%; height: auto; }
+.qr svg, .qr img { display: block; width: 100%; height: auto; }
+.pay-exact { font-size: 18px; }
+.pay-exact strong { color: var(--orange); }
+.qr-current { display: grid; gap: 10px; justify-items: start; }
 .qr p { color: #333; }
 .phone-only { display: none; }
 .upi-copy { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; width: 100%; padding-top: 12px; border-top: 1px solid var(--line); }
