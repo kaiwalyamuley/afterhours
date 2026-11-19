@@ -2,7 +2,7 @@
 import { api, DEMO } from "./api.js";
 import { esc, toast } from "./ui.js";
 import { HOME_SECTIONS, homeLayout, DEFAULT_LOOKBOOK } from "./home-layout.js";
-import { CHARACTERS, DEFAULT_LINES } from "./characters.js";
+import { CHARACTERS } from "./characters.js";
 import { usableFiles } from "./product-form.js";
 
 const PHOTO_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -18,7 +18,7 @@ export function drawPages(body, ctx) {
   let page = "home";
   let timer;
 
-  body.innerHTML = `<div class="chips"><button class="chip on" data-page="home">Home page</button><button class="chip" data-page="showcase">Banners and lookbook</button><button class="chip" data-page="gang">Characters</button><button class="chip" data-page="help">Help page</button></div>
+  body.innerHTML = `<div class="chips"><button class="chip on" data-page="home">Home page</button><button class="chip" data-page="showcase">Banners and lookbook</button><button class="chip" data-page="gang">Family chat</button><button class="chip" data-page="help">Help page</button></div>
     <div class="pg-layout">
       <div id="pg-editor"></div>
       <aside class="pg-preview">
@@ -242,19 +242,18 @@ export function drawPages(body, ctx) {
     const c = layout.characters;
     const live = ctx.store.products.filter((p) => p.status === "live");
     editor.innerHTML = `<section class="panel pg-card">
-        <div class="row-between"><div><h3>The AfterHours Gang</h3><p class="muted small">Cartoon characters who show off your products with funny lines. Mausi likes sarees, Bunty wears your tee prints, Pinky shows everything else.</p></div>${toggle("data-gang-on", c.on !== false, "Show the characters")}</div>
-        <input data-gang="title" maxlength="50" placeholder="Section title, e.g. The AfterHours Gang picks" value="${esc(c.title || "")}">
+        <div class="row-between"><div><h3>Family chat</h3><p class="muted small">A small cartoon family on a sofa chatting about what to buy from your store. Each message that mentions a product shows its picture and price, and a tap opens it. The chats write themselves from your products' names, prices, discounts and details.</p></div>${toggle("data-gang-on", c.on !== false, "Show the family chat")}</div>
+        <input data-gang="title" maxlength="50" placeholder="Strip title, e.g. What should we buy?" value="${esc(c.title || "")}">
       </section>
       <section class="panel pg-card">
-        <h3>Products they present</h3>
-        <p class="muted small">Leave all unticked to use your newest products automatically. Up to 8 are used.</p>
+        <h3>Products they talk about</h3>
+        <p class="muted small">Leave all unticked to use your newest products automatically. Up to 12 are used.</p>
         <div class="pick-list">${live.map((p) => `<label class="check"><input type="checkbox" data-gang-product="${esc(p.slug)}" ${c.products.includes(p.slug) ? "checked" : ""}><span>${esc(p.name)} <small class="muted">${esc(p.collection)}</small></span></label>`).join("") || '<p class="muted small">Add live products first.</p>'}</div>
       </section>
-      ${CHARACTERS.map((who) => `<section class="panel pg-card">
-        <div class="cols"><label class="field"><span>Name</span><input data-gang-name="${who.id}" maxlength="20" value="${esc(c.names?.[who.id] || "")}" placeholder="${esc(who.name)}"></label><p class="muted small">${esc(who.role)}</p></div>
-        <label class="field"><span>Lines, one per line</span><textarea data-gang-lines="${who.id}" rows="4" placeholder="${esc(DEFAULT_LINES[who.id].join("\n"))}">${esc((c.lines?.[who.id] || []).join("\n"))}</textarea>
-        <small class="muted">Leave empty for the built-in lines. Use {name}, {price}, {off}, {colour}, {category}, {collection}, or any product detail such as {fabric}, {border}, {fit}. A line is skipped when a product doesn't have that detail.</small></label>
-      </section>`).join("")}`;
+      <section class="panel pg-card">
+        <h3>Family names</h3>
+        <div class="spec-grid">${CHARACTERS.map((who) => `<label class="field"><span>${esc(who.role)}</span><input data-gang-name="${who.id}" maxlength="20" value="${esc(c.names?.[who.id] || "")}" placeholder="${esc(who.name)}"></label>`).join("")}</div>
+      </section>`;
     const save = () => { layout.characters = c; saveHome(); };
     editor.querySelector("[data-gang-on]").addEventListener("change", (event) => { c.on = event.target.checked; layout.characters = c; saveHome(0); });
     editor.querySelector("[data-gang]").addEventListener("input", (event) => { c.title = event.target.value.trim(); save(); });
@@ -265,10 +264,7 @@ export function drawPages(body, ctx) {
       saveHome(0);
     }));
     editor.querySelectorAll("[data-gang-name]").forEach((input) => input.addEventListener("input", () => { c.names = { ...c.names, [input.dataset.gangName]: input.value.trim() }; save(); }));
-    editor.querySelectorAll("[data-gang-lines]").forEach((input) => input.addEventListener("input", () => {
-      c.lines = { ...c.lines, [input.dataset.gangLines]: input.value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 12) };
-      save();
-    }));
+
   };
 
   const drawHelp = (editor) => {

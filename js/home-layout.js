@@ -1,7 +1,7 @@
 // What the owner can change about the home page, and the defaults.
 export const HOME_SECTIONS = [
   ["categories", "Shop by category"],
-  ["gang", "The AfterHours Gang (characters)"],
+  ["gang", "Family chat (characters)"],
   ["deals", "Deals of the day"],
   ["featured", "Picked for you"],
   ["marquee", "Scrolling text"],

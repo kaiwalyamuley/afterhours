@@ -459,7 +459,7 @@ async function pageHome() {
   app.innerHTML = `${layout.banner.on && layout.banner.text ? `<p class="announce">${esc(layout.banner.text)}</p>` : ""}${hero(layout)}<div id="strip"></div>
     ${layout.sections.filter((s) => s.on).map((s) => parts[s.id]?.() || "").join("")}`;
   bindBanners();
-  if (app.querySelector(".gang")) bindCharacters(app, shoppable, layout.characters, calm);
+  if (app.querySelector(".family")) bindCharacters(app, shoppable, layout.characters, calm);
   const lookbookStrip = app.querySelector(".lookbook");
   if (lookbookStrip) autoScroll(lookbookStrip);
   reveal(app);
@@ -853,6 +853,7 @@ async function pageCheckout() {
     const box = document.getElementById("pay-sum");
     box.innerHTML = `<dl class="sum"><dt>Subtotal</dt><dd>${money(o.subtotal)}</dd>${o.coupon ? `<dt>Coupon ${esc(coupon.code)}</dt><dd>-${money(o.coupon)}</dd>` : ""}${o.member ? `<dt>${esc(memberTier.name)} member discount</dt><dd>-${money(o.member)}</dd>` : ""}<dt>Shipping</dt><dd>${o.shipping ? money(o.shipping) : "Free"}</dd>
       ${o.discount ? `<dt>UPI discount</dt><dd>-${money(o.discount)}</dd>` : ""}
+      ${o.codFee ? `<dt>Cash on delivery fee</dt><dd>${money(o.codFee)}</dd>` : ""}
       <dt class="t">Total</dt><dd class="t">${money(o.total)}</dd>
       ${o.now && o.now < o.total ? `<dt>Pay now by UPI</dt><dd>${money(o.now)}</dd><dt>Pay at delivery</dt><dd>${money(o.total - o.now)}</dd>` : ""}</dl>`;
   };
@@ -953,8 +954,9 @@ function paymentOptions(lines, couponDiscount = 0, memberPct = 0) {
     const advance = Math.min(s.advance_inr || 99, full);
     options.push({ id: "advance", title: `Pay ${money(advance)} advance by UPI`, note: `Pay ${money(full - advance)} in cash at delivery.`, discount: 0, total: full, now: advance });
   }
-  if (hasCod()) options.push({ id: "cod", title: "Cash on delivery", note: "Pay the full amount when it arrives.", discount: 0, total: full, now: 0 });
-  return options.map((o) => ({ ...o, subtotal, shipping, coupon: couponDiscount, member: memberSaving }));
+  const codFee = Number(s.cod_fee_inr) || 0;
+  if (hasCod()) options.push({ id: "cod", title: "Cash on delivery", note: codFee ? `Pay the full amount when it arrives. Includes a ${money(codFee)} cash handling fee.` : "Pay the full amount when it arrives.", discount: 0, codFee, total: full + codFee, now: 0 });
+  return options.map((o) => ({ codFee: 0, ...o, subtotal, shipping, coupon: couponDiscount, member: memberSaving }));
 }
 
 async function pagePay(orderId) {
@@ -1074,6 +1076,7 @@ async function pageOrders() {
         ${o.status === "delivered" && i.product_id ? `<button class="btn small" data-review="${esc(i.product_id)}" data-name="${esc(i.name)}">${mine.has(i.product_id) ? `Edit your review (${mine.get(i.product_id).rating}★)` : "Write a review"}</button>` : ""}`).join("")}
       ${o.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(o.coupon_code)}</span><span>-${money(o.coupon_discount_inr)}</span></p>` : ""}
       ${o.member_tier ? `<p class="row-between small"><span>${esc(o.member_tier)} member discount</span><span>-${money(o.member_discount_inr)}</span></p>` : ""}
+      ${o.cod_fee_inr ? `<p class="row-between small"><span>Cash on delivery fee</span><span>${money(o.cod_fee_inr)}</span></p>` : ""}
       <p class="row-between total"><span>Total</span><strong>${money(o.total_inr)}</strong></p>
       <div class="pay-line"><span class="pay-state ${esc(o.payment_status)}">${PAYMENT[o.payment_status]}</span>
         ${o.amount_due_now ? `<span class="muted small">UPI ${money(o.amount_due_now)}${paidLater(o) && !["rejected", "cancelled"].includes(o.status) ? `, then ${money(paidLater(o))} at delivery` : ""}</span>` : ""}
@@ -1112,7 +1115,7 @@ function faq() {
     ["How do I choose my tee size?", "Open the Size guide on any tee page and match your chest measurement. If you are between two sizes, choose the larger one for a relaxed fit."],
     ["Can I cancel my order?", `Yes, from your orders page, until we accept it. After that we start preparing it${s.support_phone || s.support_email ? ", so please contact us quickly" : ""}.`],
     ["How do I follow my order?", "Sign in and open My orders. You will see each stage, and a tracking number once it is dispatched."],
-    ["What does shipping cost?", `${shippingText()}.`],
+    ["What does shipping cost?", `${shippingText()}.${hasCod() && Number(s.cod_fee_inr) ? ` Cash on delivery orders have an extra ${money(s.cod_fee_inr)} cash handling fee${hasUpi() ? ", which you avoid by paying by UPI" : ""}.` : ""}`],
     ["Why do I sign in with Google?", "So only you can see your orders. We receive your name, email and profile picture, and never your Google password."],
   ];
   if (s.delivery_note) items.splice(2, 0, ["How long does delivery take?", s.delivery_note]);

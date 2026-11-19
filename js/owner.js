@@ -81,6 +81,7 @@ function orderCard(order, products = []) {
     </div>
     ${order.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(order.coupon_code)}</span><span>-${money(order.coupon_discount_inr)}</span></p>` : ""}
     ${order.member_tier ? `<p class="row-between small"><span>${esc(order.member_tier)} member discount</span><span>-${money(order.member_discount_inr)}</span></p>` : ""}
+    ${order.cod_fee_inr ? `<p class="row-between small"><span>Cash on delivery fee</span><span>${money(order.cod_fee_inr)}</span></p>` : ""}
     <p class="row-between total"><span>Total</span><strong>${money(order.total_inr)}</strong></p>
     ${paymentBox(order)}
     <div class="row">${order.status === "printing" && !order.tracking_no ? `<button class="btn small primary" data-ship="${esc(order.id)}">Ship with Shiprocket</button>` : ""}${(NEXT[order.status] || []).filter(([status]) => status !== "accepted" || canAccept(order)).map(([status, label, kind]) => `<button class="btn small ${kind}" data-order="${esc(order.id)}" data-status="${status}">${label}</button>`).join("")}</div>
@@ -225,6 +226,7 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Discount for paying in full (%)</span><input name="prepaid_discount_pct" type="number" min="0" max="50" step="1" required value="${s.prepaid_discount_pct ?? 0}"></label>
     </div>
     <label class="check"><input type="checkbox" name="cod_enabled" ${s.cod_enabled !== false ? "checked" : ""}><span><strong>Offer full cash on delivery</strong><small class="muted">Turn off to require full or advance UPI payment. Needs a UPI ID.</small></span></label>
+    <label class="field"><span>Cash on delivery fee (₹)</span><input name="cod_fee_inr" type="number" min="0" max="1000" step="1" required value="${s.cod_fee_inr ?? 0}"><small class="muted">Added to full cash on delivery orders to cover your courier's COD charge. Use 0 for no fee. UPI and advance orders never pay it.</small></label>
     <h3>Size chart</h3>
     <p class="muted small">Replace these with real measurements from your blank tees, in inches.</p>
     <div class="size-table-wrap"><table class="size-table size-edit">
@@ -279,6 +281,7 @@ function drawSettings(body, ctx) {
         parcel_height_cm: Number(data.parcel_height_cm),
         advance_inr: Number(data.advance_inr),
         prepaid_discount_pct: Number(data.prepaid_discount_pct),
+        cod_fee_inr: Math.max(0, Math.round(Number(data.cod_fee_inr) || 0)),
         shipping_inr: Number(data.shipping_inr),
         free_shipping_over: Number(data.free_shipping_over),
       });

@@ -161,8 +161,8 @@ function summarize(orders, costs, costOf) {
   const kept = costed.filter((o) => !isRefused(o));
   const value = sold.reduce((sum, o) => sum + o.total_inr, 0);
   const units = sold.flatMap((o) => o.order_items).reduce((sum, i) => sum + i.quantity, 0);
-  const goods = kept.reduce((sum, o) => sum + o.total_inr - o.shipping_inr, 0);
-  const shippingIn = kept.reduce((sum, o) => sum + o.shipping_inr, 0);
+  const goods = kept.reduce((sum, o) => sum + o.total_inr - o.shipping_inr - (o.cod_fee_inr || 0), 0);
+  const shippingIn = kept.reduce((sum, o) => sum + o.shipping_inr + (o.cod_fee_inr || 0), 0);
   const gst = (goods * costs.gstPct) / (100 + costs.gstPct);
   const tee = costed.flatMap((o) => o.order_items).reduce((sum, i) => sum + i.quantity * costOf(i), 0);
   const courier = shipped.length * costs.courier;
@@ -287,7 +287,7 @@ export async function drawAnalytics(body, ctx) {
       <section class="panel chart-panel"><h3>Order value over time</h3>${chartHtml(rows)}</section>
       <div class="report-grid">
         <section class="panel"><h3>Estimated profit and loss</h3>${costTable([
-          ["Tee sales after discounts", whole(a.goods)], ["Shipping charged", whole(a.shippingIn)], ...(a.gst ? [["GST", `-${whole(a.gst)}`]] : []),
+          ["Product sales after discounts", whole(a.goods)], ["Shipping and COD fees charged", whole(a.shippingIn)], ...(a.gst ? [["GST", `-${whole(a.gst)}`]] : []),
           ["Tee costs", `-${whole(a.tee)}`], ["Courier", `-${whole(a.courier)}`], ["Return courier", `-${whole(a.returns)}`], ["Payment and COD fees", `-${whole(a.fees)}`], ...(a.ads ? [["Ads", `-${whole(a.ads)}`]] : []),
           ["Estimated profit", whole(a.profit), true],
         ])}</section>
