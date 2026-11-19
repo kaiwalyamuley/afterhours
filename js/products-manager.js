@@ -71,7 +71,7 @@ function drawQuickPublish(area, ctx, economics) {
   const draw = () => {
     if (!state.drafts.length) {
       area.innerHTML = `<label class="qp-drop" id="qp-drop"><input type="file" multiple accept="${GRAPHIC_TYPES.join(",")}" hidden>
-        <b>+</b><span><strong>Drop tee designs here to publish</strong><small class="muted">Each image becomes a custom tee. You can select many at once. Use Add a saree for sarees.</small></span></label>`;
+        <b>+</b><span><strong>Drop tee designs here to publish</strong><small class="muted">Each image becomes a custom tee. You can select many at once. For other categories, use Add a product.</small></span></label>`;
       area.querySelector("input").addEventListener("change", (event) => addFiles([...event.target.files]));
       bindDrop(area.querySelector("#qp-drop"), addFiles);
       return;
@@ -133,9 +133,9 @@ export async function drawProducts(body, ctx) {
   body.innerHTML = `<div id="qp-area"></div>
     <div class="row-between toolbar pm-tools">
       <input id="pm-search" type="search" placeholder="Search ${products.length} products" aria-label="Search products">
-      <div class="row"><button class="btn small primary" id="new-saree">Add a saree</button><button class="btn small" id="new">Add a tee with full details</button></div>
+      <div class="row"><select id="new-cat" class="pm-new-cat" aria-label="Category for the new product">${ctx.store.categories.map((c) => `<option value="${esc(c.slug)}">${esc(c.name)}</option>`).join("")}</select><button class="btn small primary" id="new">Add a product</button></div>
     </div>
-    <div class="chips" id="pm-kinds">${[["all", "All"], ["saree", "Sarees"], ["tee", "Custom tees"]].map(([v, l]) => `<button class="chip ${v === kind ? "on" : ""}" data-kind="${v}">${l}</button>`).join("")}</div>
+    <div class="chips" id="pm-kinds">${[["all", "All"], ...ctx.store.categories.map((c) => [c.slug, c.name])].map(([v, l]) => `<button class="chip ${v === kind ? "on" : ""}" data-kind="${esc(v)}">${esc(l)}</button>`).join("")}</div>
     <div id="pm-list"></div>
     <div class="pm-bulk" id="pm-bulk" hidden></div>`;
   drawQuickPublish(body.querySelector("#qp-area"), ctx, economics);
@@ -245,7 +245,7 @@ export async function drawProducts(body, ctx) {
       ${shown.map((p) => `<div class="pm-row" data-id="${esc(p.id)}">
         <label class="pm-check"><input type="checkbox" data-pick aria-label="Select ${esc(p.name)}" ${selected.has(p.id) ? "checked" : ""}></label>
         <div class="pm-main"><div class="thumb">${p.colors?.[0]?.images?.[0] ? `<img src="${esc(p.colors[0].images[0])}" alt="">` : productArt(p)}</div>
-          <div class="pm-text"><span class="pm-kind ${p.category === "saree" ? "saree" : ""}">${p.category === "saree" ? "Saree" : "Tee"}</span><input class="pm-name" maxlength="80" aria-label="Name" value="${esc(p.name)}"><input class="pm-collection" maxlength="40" aria-label="Collection of ${esc(p.name)}" value="${esc(p.collection)}"></div></div>
+          <div class="pm-text"><span class="pm-kind ${p.category === "tee" ? "" : "saree"}">${esc(ctx.store.categories.find((c) => c.slug === p.category)?.name || p.category)}</span><input class="pm-name" maxlength="80" aria-label="Name" value="${esc(p.name)}"><input class="pm-collection" maxlength="40" aria-label="Collection of ${esc(p.name)}" value="${esc(p.collection)}"></div></div>
         <div class="pm-price"><label class="inline">₹<input class="price-input" type="number" inputmode="numeric" min="1" step="1" aria-label="Price of ${esc(p.name)}" value="${p.price_inr}"></label><small data-profit>${profitText(p, p.price_inr)}</small></div>
         <label class="inline pm-was">₹<input class="was-input" type="number" inputmode="numeric" min="1" step="1" aria-label="Original price of ${esc(p.name)}" placeholder="None" value="${p.compare_at_inr ?? ""}"></label>
         <select class="status-input" aria-label="Visibility of ${esc(p.name)}">${STATUSES.map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}</select>
@@ -311,8 +311,7 @@ export async function drawProducts(body, ctx) {
     });
   };
 
-  body.querySelector("#new").addEventListener("click", () => productForm(null, ctx, "tee"));
-  body.querySelector("#new-saree").addEventListener("click", () => productForm(null, ctx, "saree"));
+  body.querySelector("#new").addEventListener("click", () => productForm(null, ctx, body.querySelector("#new-cat").value));
   body.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => {
     kind = b.dataset.kind;
     body.querySelectorAll("[data-kind]").forEach((x) => x.classList.toggle("on", x === b));

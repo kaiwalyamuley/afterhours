@@ -1,20 +1,21 @@
 // The owner console page. Only an owner account can load its data;
 // the database enforces that, and this gate explains it.
 import { api, DEMO } from "./api.js";
-import { esc, toast, GOOGLE_ICON, wordmark } from "./ui.js";
+import { esc, toast, GOOGLE_ICON, wordmark, setCategories } from "./ui.js";
 import { renderOwner, pendingCount, consoleTabs } from "./owner.js";
 import { pageSwap, markLogin, consumeLogin, playLogin } from "./motion.js";
 import { mountSide, unmountSide, drawSide, sideToggle } from "./side.js";
 
 const app = document.getElementById("app");
 const nav = document.getElementById("nav");
-const store = { profile: null, products: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, ownerPending: 0 };
+const store = { profile: null, products: [], categories: [], settings: { shipping_inr: 79, free_shipping_over: 1499 }, ownerPending: 0 };
 let polling;
 
 async function refresh() {
   const { orders } = store.profile.access;
   let messages;
-  [store.products, store.settings, store.ownerPending, messages] = await Promise.all([api.products(), api.settings(), orders ? pendingCount() : 0, orders ? api.messages() : []]);
+  [store.products, store.categories, store.settings, store.ownerPending, messages] = await Promise.all([api.products(), api.categories(), api.settings(), orders ? pendingCount() : 0, orders ? api.messages() : []]);
+  setCategories(store.categories);
   store.openHelp = messages.filter((m) => m.status === "open").length;
 }
 

@@ -20,6 +20,9 @@ const ICONS = {
   store: "M4 9l1-5h14l1 5M4 9v11h16V9M4 9h16M10 20v-6h4v6",
   out: "M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10",
   menu: "M4 6h16M4 12h16M4 18h16",
+  grid: "M4 4h7v7H4V4Zm9 0h7v7h-7V4ZM4 13h7v7H4v-7Zm9 0h7v7h-7v-7Z",
+  heart: "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z",
+  search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Zm5-2 4 4",
 };
 
 const icon = (name) => `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${ICONS[name]}"/></svg>`;

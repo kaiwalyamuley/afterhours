@@ -112,24 +112,32 @@ export function tee(product, side = "back", eager = false, hex = "") {
   return `<div class="tee">${teeSvg(side, hex)}${art}</div>`;
 }
 
-/* ---------- sarees ---------- */
+/* ---------- categories ---------- */
 export const FREE_SIZE = "Free Size";
-export const isSaree = (product) => product?.category === "saree";
-export const SAREE_TYPES = ["Banarasi", "Kanjeevaram", "Paithani", "Chanderi", "Bandhani", "Patola", "Georgette", "Chiffon", "Cotton", "Linen", "Organza", "Printed"];
-export const SAREE_OCCASIONS = ["Wedding", "Festive", "Puja", "Party", "Office", "Daily wear"];
-export const SAREE_FABRICS = ["Pure silk", "Art silk", "Cotton", "Cotton silk", "Linen", "Georgette", "Chiffon", "Crepe", "Organza", "Net"];
-/** Saree facts in the order customers read them. */
-export const SAREE_FACTS = [
-  ["saree_type", "Saree type"], ["fabric", "Fabric"], ["occasion", "Occasion"], ["work", "Work"],
-  ["length_m", "Length"], ["blouse_piece", "Blouse piece"], ["care", "Care"],
-];
-export const factValue = (key, value) => {
-  if (key === "length_m") return value ? `${value} metres` : "";
-  if (key === "blouse_piece") return value === true ? "Included, unstitched" : value === false ? "Not included" : "";
-  return value || "";
-};
-/** "Size M" for tees, "Free size" for sarees. */
+const categoryMap = new Map();
+/** Remembers the store's categories so every page draws products the same way. */
+export function setCategories(list) {
+  categoryMap.clear();
+  (list || []).forEach((c) => categoryMap.set(c.slug, c));
+}
+export const categoryOf = (product) => categoryMap.get(product?.category) || categoryMap.get("tee") || { slug: product?.category || "tee", name: "Products", art: "tee", fields: [], sizes: [] };
+export const artOf = (product) => categoryOf(product).art || "photo";
+export const isSaree = (product) => artOf(product) === "saree";
+export const isPrinted = (product) => artOf(product) === "tee";
+export const categoryPath = (slug) => `#/c/${encodeURIComponent(slug)}`;
+
+/** Formats one detail value for customers. */
+export function fieldText(field, value) {
+  if (value === undefined || value === null || value === "") return "";
+  if (field.type === "yesno") return value === true ? "Included" : value === false ? "Not included" : "";
+  if (field.type === "number") return `${value}${field.unit ? ` ${field.unit}` : ""}`;
+  return String(value);
+}
+/** [label, text] for every detail the product has filled in. */
+export const specsOf = (product) => (categoryOf(product).fields || []).map((f) => [f.label, fieldText(f, product.details?.[f.key])]).filter(([, v]) => v);
+/** "Size M" for sized products, "Free size" for one-size products. */
 export const sizeText = (size) => (size === FREE_SIZE ? "Free size" : `Size ${size}`);
+export const oneSize = (product) => !product.sizes?.length || (product.sizes.length === 1 && product.sizes[0] === FREE_SIZE);
 
 /** A folded saree with a zari border, used until the owner adds real photos. */
 export function sareeArt(hex = "#8C1C2B") {
@@ -156,14 +164,30 @@ export function sareeArt(hex = "#8C1C2B") {
 /** First photo for a colour, then shared photos, else null. */
 export const photoOf = (product, color) => color?.images?.[0] || product?.colors?.[0]?.images?.[0] || product?.gallery?.[0] || product?.model_image || null;
 
-/** A product's picture: a photo when there is one, else the tee mockup or folded saree. */
+/** A simple folded garment with a tag, for categories that have no photo yet. */
+export function itemArt(hex = "#b8862f") {
+  const base = esc(hex || "#b8862f");
+  return `<svg class="saree-art item-art" viewBox="0 0 600 700" aria-hidden="true">
+    <defs><linearGradient id="itemSheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient></defs>
+    <rect width="600" height="700" fill="#f3e9da"/>
+    <g transform="translate(150 190)">
+      <path d="M40 0h220l40 60v260H0V60Z" fill="${base}"/>
+      <path d="M40 0h220l40 60v260H0V60Z" fill="url(#itemSheen)"/>
+      <path d="M110 0c10 40 70 40 80 0" fill="none" stroke="#000" stroke-opacity=".18" stroke-width="10"/>
+      <rect x="0" y="290" width="300" height="30" fill="#000" fill-opacity=".12"/>
+      <path d="M230 120h50v70l-25 18-25-18Z" fill="#fff8ee"/><circle cx="255" cy="138" r="6" fill="${base}"/>
+    </g>
+  </svg>`;
+}
+
+/** A product's picture: a photo when there is one, else the tee mockup or a drawing. */
 export function productArt(product, { side = "back", hex = "", eager = false, color = null } = {}) {
   const pick = color || (product?.colors || []).find((c) => c.hex === hex) || product?.colors?.[0] || null;
-  if (isSaree(product)) {
-    const src = photoOf(product, pick);
-    return src ? `<img class="photo" src="${esc(src)}" alt="" loading="${eager ? "eager" : "lazy"}">` : sareeArt(hex || pick?.hex);
-  }
-  return tee(product, side, eager, hex || pick?.hex || "");
+  const art = artOf(product);
+  if (art === "tee") return tee(product, side, eager, hex || pick?.hex || "");
+  const src = photoOf(product, pick);
+  if (src) return `<img class="photo" src="${esc(src)}" alt="" loading="${eager ? "eager" : "lazy"}">`;
+  return art === "saree" ? sareeArt(hex || pick?.hex) : itemArt(hex || pick?.hex);
 }
 
 /** The AfterHours wordmark, set in type so it reads on light and dark backgrounds. */

@@ -1,6 +1,9 @@
 // What the owner can change about the home page, and the defaults.
 export const HOME_SECTIONS = [
   ["categories", "Shop by category"],
+  ["gang", "The AfterHours Gang (characters)"],
+  ["deals", "Deals of the day"],
+  ["featured", "Picked for you"],
   ["marquee", "Scrolling text"],
   ["trust", "Why shop with us"],
   ["member", "Membership banner"],
@@ -10,7 +13,9 @@ export const HOME_SECTIONS = [
   ["how", "How it works"],
 ];
 
-const DEFAULT_HERO = { kicker: "Sarees and custom tees", line1: "Tradition, worn", line2: "your way.", text: "Handpicked traditional and casual sarees for every celebration, and graphic tees printed the moment you order.", product: "" };
+export const DEFAULT_LOOKBOOK = Array.from({ length: 12 }, (_, i) => ({ src: `assets/lookbook/${String(i + 1).padStart(2, "0")}.webp`, caption: "", link: "" }));
+
+const DEFAULT_HERO = { kicker: "Sarees, custom tees and more", line1: "Tradition, worn", line2: "your way.", text: "Handpicked sarees for every celebration, graphic tees printed the moment you order, and new categories every season.", product: "" };
 
 /** Fills in anything not saved yet, so new sections appear without a data change. */
 export function homeLayout(saved) {
@@ -24,6 +29,14 @@ export function homeLayout(saved) {
   return {
     banner: { on: false, text: "", ...(value.banner || {}) },
     hero: { ...DEFAULT_HERO, ...(value.hero || {}) },
+    banners: value.banners || [],
+    lookbook: value.lookbook || [],
+    lookbook_title: value.lookbook_title || "",
+    featured: value.featured || [],
+    featured_title: value.featured_title || "",
+    marquee: value.marquee || [],
+    characters: { on: true, title: "", products: [], names: {}, lines: {}, ...(value.characters || {}) },
+    footer_text: value.footer_text || "",
     sections,
     collections: value.collections || [],
   };

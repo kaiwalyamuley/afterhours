@@ -65,6 +65,17 @@ async function liveApi() {
     async products() {
       return unwrap(await db.from("products").select("*").order("sort"));
     },
+    async categories() {
+      return unwrap(await db.from("categories").select("*").order("sort"));
+    },
+    async saveCategory({ id, ...values }) {
+      values.updated_at = new Date().toISOString();
+      if (id) unwrap(await db.from("categories").update(values).eq("id", id));
+      else unwrap(await db.from("categories").insert(values));
+    },
+    async deleteCategory(id) {
+      unwrap(await db.from("categories").delete().eq("id", id));
+    },
     async settings() {
       return unwrap(await db.from("store_settings").select("*").eq("id", 1).single());
     },

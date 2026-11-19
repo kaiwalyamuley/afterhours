@@ -3,6 +3,7 @@ import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, 
 import { OWNER_REASONS } from "./reasons.js";
 import { drawAnalytics, drawMargin } from "./analytics.js";
 import { drawProducts } from "./products-manager.js";
+import { drawCategories } from "./categories-manager.js";
 import { drawPages } from "./pages.js";
 import { drawMembers } from "./members.js";
 
@@ -473,6 +474,7 @@ async function drawCoupons(body) {
 export const consoleTabs = (access) => [
   ["orders", "Orders", access.orders, "orders"],
   ["products", "Products", access.products, "shop"],
+  ["categories", "Categories", access.products, "grid"],
   ["pages", "Pages", access.settings, "home"],
   ["help", "Help desk", access.orders, "chat"],
   ["reviews", "Reviews", access.products, "star"],
@@ -497,6 +499,7 @@ export async function renderOwner(app, tab, ctx) {
   </section>`;
   const body = document.getElementById("owner-body");
   if (active === "products") await drawProducts(body, ctx);
+  else if (active === "categories") drawCategories(body, ctx);
   else if (active === "pages") drawPages(body, ctx);
   else if (active === "settings") drawSettings(body, ctx);
   else if (active === "team") await drawTeam(body, ctx);
