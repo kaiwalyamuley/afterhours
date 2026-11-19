@@ -4,6 +4,7 @@ import { esc } from "./ui.js";
 const ICONS = {
   home: "M3 11 12 3l9 8M5 9.5V21h14V9.5",
   shop: "M8 3 3 7l3 3 2-1v12h8V9l2 1 3-3-5-4a4 4 0 0 1-8 0Z",
+  saree: "M9 3h6l4 18H5L9 3Zm0 0c1 5 5 7 10 7M7 13c3 0 6 1 8 4",
   bag: "M6 8h12l1 13H5L6 8Zm3 0V6a3 3 0 0 1 6 0v2",
   orders: "M4 7l8-4 8 4v10l-8 4-8-4V7Zm0 0 8 4 8-4M12 11v10",
   help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-2.5-11a2.5 2.5 0 1 1 3.7 2.2c-.8.5-1.2 1-1.2 1.8m0 3h0",

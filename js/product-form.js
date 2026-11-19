@@ -1,6 +1,6 @@
 // The guided, five-step form for adding and editing a product.
 import { api } from "./api.js";
-import { esc, money, toast, openModal, tee } from "./ui.js";
+import { esc, money, toast, openModal, tee, sareeArt, FREE_SIZE, SAREE_TYPES, SAREE_OCCASIONS, SAREE_FABRICS } from "./ui.js";
 import { attachPriceHelp } from "./analytics.js";
 
 const COLOR_HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -12,13 +12,23 @@ const MAX_COLOR_PHOTOS = 6;
 const MAX_SHARED_PHOTOS = 12;
 const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
 export const QUICK_COLORS = [["Black", "#000000"], ["White", "#FFFFFF"], ["Navy", "#1B2A4A"], ["Charcoal", "#36454F"], ["Maroon", "#800000"], ["Olive", "#556B2F"], ["Beige", "#D8C9A8"]];
-const STEPS = [
-  ["Details", "What is this tee, and who is it for?"],
-  ["Price", "Set what customers pay. We suggest a price from your costs."],
-  ["Sizes and colours", "Choose the sizes and tee colours you can print on. Each colour can have its own photos."],
-  ["Graphics and photos", "Add the print files for your printer, and photos that apply to every colour."],
-  ["Review", "Check everything, then save."],
-];
+const STEP_TEXT = {
+  tee: [
+    ["Details", "What is this tee, and who is it for?"],
+    ["Price", "Set what customers pay. We suggest a price from your costs."],
+    ["Sizes and colours", "Choose the sizes and tee colours you can print on. Each colour can have its own photos."],
+    ["Graphics and photos", "Add the print files for your printer, and photos that apply to every colour."],
+    ["Review", "Check everything, then save."],
+  ],
+  saree: [
+    ["Details", "What is this saree, and which collection does it belong to?"],
+    ["Price", "Set what customers pay. Enter what the saree cost you to see your profit."],
+    ["Saree details", "Fabric, length and the colours you have. Each colour can have its own photos."],
+    ["Photos", "Photos that apply to every colour, like the pallu, border and drape."],
+    ["Review", "Check everything, then save."],
+  ],
+};
+const STEPS = STEP_TEXT.tee;
 
 export const slugify = (text) => text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -89,13 +99,19 @@ function drawPhotos(area, items, limit, onChange) {
   area.dropHandler = add;
 }
 
-export function productForm(product, ctx) {
-  const p = product || { name: "", tagline: "", description: "", collection: ctx.store.products[ctx.store.products.length - 1]?.collection || "", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live", gender: "unisex", colors: [{ name: "Black", hex: "#000000" }] };
+export function productForm(product, ctx, startCategory = "tee") {
+  const lastOf = (category) => [...ctx.store.products].reverse().find((x) => (x.category || "tee") === category);
+  const blank = startCategory === "saree"
+    ? { category: "saree", name: "", tagline: "", description: "", collection: lastOf("saree")?.collection || "", price_inr: 1999, compare_at_inr: null, sizes: [FREE_SIZE], status: "live", gender: "female", colors: [{ name: "Maroon", hex: "#800000" }], details: { length_m: 6.3, blouse_piece: true, care: "Dry clean only" } }
+    : { category: "tee", name: "", tagline: "", description: "", collection: lastOf("tee")?.collection || "", price_inr: 899, compare_at_inr: null, sizes: ["S", "M", "L", "XL", "XXL"], status: "live", gender: "unisex", colors: [{ name: "Black", hex: "#000000" }], details: {} };
+  const p = product || blank;
+  const details = { ...(p.details || {}) };
   const collections = [...new Set(ctx.store.products.map((x) => x.collection))];
-  const sizeChoices = [...new Set([...SIZE_OPTIONS, ...p.sizes])];
+  const sizeChoices = [...new Set([...SIZE_OPTIONS, ...p.sizes.filter((s) => s !== FREE_SIZE)])];
   const state = {
     step: 0,
-    sizes: new Set(p.sizes),
+    category: p.category || "tee",
+    sizes: new Set(p.sizes.filter((s) => s !== FREE_SIZE).length ? p.sizes : ["S", "M", "L", "XL", "XXL"]),
     colors: (p.colors || []).map((c) => ({ name: c.name, hex: c.hex.toUpperCase(), photos: (c.images || []).map((src) => ({ src })) })),
     shared: [...new Set([p.model_image, ...(p.gallery || [])].filter(Boolean))].map((src) => ({ src })),
     back: p.print_back ? { src: p.print_back } : null,
@@ -106,7 +122,8 @@ export function productForm(product, ctx) {
     tried: false,
   };
 
-  const stepHtml = (index, inner) => `<section class="pf-step" data-step="${index}" ${index ? "hidden" : ""}><header><h3>${STEPS[index][0]}</h3><p class="muted small">${STEPS[index][1]}</p></header>${inner}</section>`;
+  const stepHtml = (index, inner) => `<section class="pf-step" data-step="${index}" ${index ? "hidden" : ""}><header><h3 data-step-title>${STEPS[index][0]}</h3><p class="muted small" data-step-text>${STEPS[index][1]}</p></header>${inner}</section>`;
+  const listInput = (key, label, options, placeholder, hint = "") => field(`d-${key}`, label, `<input id="pf-d-${key}" name="d_${key}" maxlength="40" list="pf-${key}-list" value="${esc(details[key] || "")}" placeholder="${placeholder}"><datalist id="pf-${key}-list">${options.map((o) => `<option value="${esc(o)}"></option>`).join("")}</datalist>`, hint);
   const graphic = (key, label, hint) => `<div class="field pf-field"><span class="pf-label">${label}</span>
     <label class="pf-graphic" id="pf-${key}-zone"><input type="file" id="pf-${key}" accept="${GRAPHIC_TYPES.join(",")}" hidden><span class="pf-graphic-view" id="pf-${key}-view"></span></label>
     <small class="muted">${hint}</small><small class="pf-err" data-err="${key}" hidden></small></div>`;
@@ -116,38 +133,52 @@ export function productForm(product, ctx) {
     <div class="pf-layout">
       <form id="product" class="form" novalidate>
         ${stepHtml(0, `
+          <div class="field pf-field"><span class="pf-label">What are you selling?</span>${segments("category", [["tee", "Custom tee"], ["saree", "Saree"]], state.category, "Product type")}</div>
           ${field("name", "Product name", `<input id="pf-name" name="name" required maxlength="80" value="${esc(p.name)}" placeholder="Example: Midnight Rider">`)}
           ${field("tagline", "Short tagline", `<input id="pf-tagline" name="tagline" maxlength="120" value="${esc(p.tagline)}" placeholder="One line shown under the name">`, "Optional, up to 120 characters.")}
           ${field("description", "Description", `<textarea id="pf-description" name="description" rows="3" maxlength="600" placeholder="What's the idea behind this design?">${esc(p.description)}</textarea>`, "Optional, shown on the product page.")}
           ${field("collection", "Collection", `<input id="pf-collection" name="collection" required maxlength="40" list="pf-collections" value="${esc(p.collection)}"><datalist id="pf-collections">${collections.map((c) => `<option value="${esc(c)}"></option>`).join("")}</datalist>`, "Pick one or type a new name. Collections appear in the side menu.")}
-          <div class="field pf-field"><span class="pf-label">Made for</span>${segments("gender", [["unisex", "Both"], ["male", "Male"], ["female", "Female"]], p.gender || "unisex", "Made for")}<small class="muted">"Both" appears under the Male and Female filters.</small></div>
+          <div class="field pf-field" data-for="tee"><span class="pf-label">Made for</span>${segments("gender", [["unisex", "Both"], ["male", "Male"], ["female", "Female"]], p.gender || "unisex", "Made for")}<small class="muted">"Both" appears under the Male and Female filters.</small></div>
           <div class="field pf-field"><span class="pf-label">Visibility</span>${segments("status", [["live", "Live"], ["coming_soon", "Coming soon"], ["hidden", "Hidden"]], p.status, "Visibility")}<small class="muted" id="pf-status-hint"></small></div>`)}
         ${stepHtml(1, `
           <div class="cols">
             ${field("price", "Selling price (₹)", `<input id="pf-price" name="price_inr" type="number" inputmode="numeric" min="1" step="1" required value="${p.price_inr}">`)}
             ${field("compare", "Original price (₹)", `<input id="pf-compare" name="compare_at_inr" type="number" inputmode="numeric" min="1" step="1" value="${p.compare_at_inr ?? ""}">`, '<span id="pf-discount">Optional. Shown crossed out.</span>')}
           </div>
-          ${field("cost", "This tee's cost (₹)", '<input id="pf-cost" name="product_cost" type="number" inputmode="numeric" min="0" step="1">', "Optional. Leave blank to use the costs in your Margin tab.")}
+          ${field("cost", "Your cost for this product (₹)", '<input id="pf-cost" name="product_cost" type="number" inputmode="numeric" min="0" step="1">', "Optional. Leave blank to use the costs in your Margin tab.")}
           <div class="price-help" id="price-help"><p class="muted small">Working out a suggested price...</p></div>
           <p class="muted small">Tap Break-even, Suggested or Premium to use that price.</p>`)}
         ${stepHtml(2, `
-          <div class="field pf-field"><span class="pf-label">Sizes you offer</span>
+          <div class="pf-saree" data-for="saree">
+            <div class="cols">
+              ${listInput("saree_type", "Saree type", SAREE_TYPES, "Example: Banarasi")}
+              ${listInput("fabric", "Fabric", SAREE_FABRICS, "Example: Pure silk")}
+            </div>
+            <div class="cols">
+              ${field("d-occasion", "Occasion", `<select id="pf-d-occasion" name="d_occasion"><option value="">Choose an occasion</option>${SAREE_OCCASIONS.map((o) => `<option ${o === details.occasion ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`, "Shown as a filter in the saree shop.")}
+              ${field("d-length", "Length (metres)", `<input id="pf-d-length" name="d_length_m" type="number" inputmode="decimal" min="4" max="10" step="0.1" value="${esc(details.length_m ?? "")}">`, "Most sarees are 5.5 to 6.3 metres.")}
+            </div>
+            ${field("d-work", "Work and border", `<input id="pf-d-work" name="d_work" maxlength="60" value="${esc(details.work || "")}" placeholder="Example: Zari border with woven buti">`, "Optional.")}
+            <div class="field pf-field"><span class="pf-label">Blouse piece</span>${segments("d_blouse_piece", [["yes", "Included"], ["no", "Not included"]], details.blouse_piece === false ? "no" : "yes", "Blouse piece")}</div>
+            ${field("d-care", "Care", `<input id="pf-d-care" name="d_care" maxlength="60" value="${esc(details.care || "")}" placeholder="Example: Dry clean only">`, "Optional.")}
+          </div>
+          <div class="field pf-field" data-for="tee"><span class="pf-label">Sizes you offer</span>
             <div class="pf-sizes">${sizeChoices.map((s) => `<button type="button" class="size ${state.sizes.has(s) ? "on" : ""}" data-size="${esc(s)}" aria-pressed="${state.sizes.has(s)}">${esc(s)}</button>`).join("")}</div>
             <small class="muted">Measurements in the size guide come from Store info.</small><small class="pf-err" data-err="sizes" hidden></small></div>
-          <div class="field pf-field"><span class="pf-label">Tee colours</span>
+          <div class="field pf-field"><span class="pf-label"><span data-for="tee">Tee colours</span><span data-for="saree">Saree colours</span></span>
             <div class="pf-quick" id="pf-quick"></div>
             <div class="pf-colors" id="pf-colors"></div>
             <button type="button" class="btn small" id="pf-add-color">Add a custom colour</button>
-            <small class="muted">Use the exact hex code of your blank tee. Up to ${MAX_COLORS} colours, each with up to ${MAX_COLOR_PHOTOS} photos. The first colour is what customers see first.</small>
+            <small class="muted"><span data-for="tee">Use the exact hex code of your blank tee.</span><span data-for="saree">Pick the closest colour, and add photos of that saree.</span> Up to ${MAX_COLORS} colours, each with up to ${MAX_COLOR_PHOTOS} photos. The first colour is what customers see first.</small>
             <small class="pf-err" data-err="colors" hidden></small></div>`)}
         ${stepHtml(3, `
-          <div class="cols">
+          <div class="cols" data-for="tee">
             ${graphic("back", "Back graphic", "Required. A transparent PNG works best. This file goes to your printer.")}
             ${graphic("front", "Front graphic", "Optional. Usually a small chest print.")}
           </div>
           <div class="field pf-field"><span class="pf-label">Photos for every colour</span>
             <div class="pf-photos" id="pf-shared"></div>
-            <small class="muted">Up to ${MAX_SHARED_PHOTOS}, like lifestyle shots or close-ups of the print. Tap a photo to show it first, or drag photos here.</small></div>`)}
+            <small class="muted">Up to ${MAX_SHARED_PHOTOS}, like lifestyle shots or close-ups. Tap a photo to show it first, or drag photos here.</small><small class="pf-err" data-err="photos" hidden></small></div>`)}
         ${stepHtml(4, '<div id="pf-review"></div>')}
         <p class="error" id="product-error" hidden></p>
       </form>
@@ -176,11 +207,15 @@ export function productForm(product, ctx) {
       if (!el.collection.value.trim()) add(0, "collection", "Choose or type a collection.");
       if (!Number.isInteger(price) || price < 1) add(1, "price", "Enter a whole number of rupees.");
       if (compare !== null && (!Number.isInteger(compare) || compare <= price)) add(1, "compare", "This should be higher than the selling price.");
-      if (!state.sizes.size) add(2, "sizes", "Choose at least one size.");
+      const saree = state.category === "saree";
+      if (!saree && !state.sizes.size) add(2, "sizes", "Choose at least one size.");
+      const length = el.d_length_m.value ? Number(el.d_length_m.value) : null;
+      if (saree && length !== null && !(length >= 4 && length <= 10)) add(2, "d-length", "Enter a length between 4 and 10 metres.");
       if (state.colors.some((c) => !c.name.trim())) add(2, "colors", "Give every colour a name.");
       else if (state.colors.some((c) => !COLOR_HEX.test(c.hex))) add(2, "colors", "Each colour needs a hex code like #1B2A4A.");
       else if (new Set(state.colors.map((c) => c.hex)).size !== state.colors.length) add(2, "colors", "Each colour needs a different hex code.");
-      if (!state.back) add(3, "back", "Upload the back graphic.");
+      if (!saree && !state.back) add(3, "back", "Upload the back graphic.");
+      if (saree && !state.shared.length && !state.colors.some((c) => c.photos.length)) add(3, "photos", "Add at least one photo of the saree, here or under a colour.");
       return list;
     };
     const showProblems = (list) => {
@@ -203,7 +238,11 @@ export function productForm(product, ctx) {
       const price = Number(el.price_inr.value) || 0;
       const compare = Number(el.compare_at_inr.value) || 0;
       const off = compare > price && price ? Math.round((1 - price / compare) * 100) : 0;
-      const art = photo ? `<img class="pf-photo" src="${esc(photo)}" alt="">` : tee({ print_back: state.back?.src, print_front: state.front?.src }, "back", true, COLOR_HEX.test(color?.hex || "") ? color.hex : "");
+      const hex = COLOR_HEX.test(color?.hex || "") ? color.hex : "";
+      const sareePhoto = state.category === "saree" ? photo || state.shared[0]?.src : null;
+      const art = state.category === "saree"
+        ? (sareePhoto ? `<img class="pf-photo" src="${esc(sareePhoto)}" alt="">` : sareeArt(hex))
+        : photo ? `<img class="pf-photo" src="${esc(photo)}" alt="">` : tee({ print_back: state.back?.src, print_front: state.front?.src }, "back", true, hex);
       $("#pf-preview").innerHTML = `<div class="pf-art">${art}</div>
         <h4>${esc(el.name.value.trim() || "Product name")}</h4>
         <p class="muted small">${esc(el.tagline.value.trim())}</p>
@@ -326,21 +365,48 @@ export function productForm(product, ctx) {
       const list = problems();
       const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
       const noPhotos = state.colors.filter((c) => !c.photos.length).map((c) => c.name.trim()).filter(Boolean);
+      const saree = state.category === "saree";
+      const d = readDetails();
       const rows = [
+        ["Type", saree ? "Saree" : "Custom tee", 0],
         ["Name", el.name.value.trim() || "Not set", 0],
         ["Collection", el.collection.value.trim() || "Not set", 0],
-        ["Made for", { unisex: "Both", male: "Male", female: "Female" }[el.gender.value], 0],
+        ...(saree ? [] : [["Made for", { unisex: "Both", male: "Male", female: "Female" }[el.gender.value], 0]]),
         ["Visibility", { live: "Live", coming_soon: "Coming soon", hidden: "Hidden" }[el.status.value], 0],
         ["Price", money(el.price_inr.value), 1],
-        ["Sizes", [...state.sizes].join(", ") || "None", 2],
-        ["Colours", state.colors.map((c) => c.name.trim() || c.hex).join(", ") || "Black only", 2],
-        ["Graphics", state.front ? "Back and front" : state.back ? "Back only" : "Missing", 3],
+        ...(saree
+          ? [["Saree", [d.saree_type, d.fabric, d.occasion].filter(Boolean).join(", ") || "Not set", 2], ["Length", d.length_m ? `${d.length_m} metres` : "Not set", 2], ["Blouse piece", d.blouse_piece ? "Included" : "Not included", 2]]
+          : [["Sizes", [...state.sizes].join(", ") || "None", 2]]),
+        ["Colours", state.colors.map((c) => c.name.trim() || c.hex).join(", ") || (saree ? "None" : "Black only"), 2],
+        ...(saree ? [] : [["Graphics", state.front ? "Back and front" : state.back ? "Back only" : "Missing", 3]]),
         ["Photos", `${count(state.colors.reduce((sum, c) => sum + c.photos.length, 0), "colour photo")}, ${count(state.shared.length, "shared photo")}`, state.colors.length ? 2 : 3],
       ];
       $("#pf-review").innerHTML = `${list.length ? `<div class="pf-todo"><strong>Before you can save</strong>${list.map((x) => `<button type="button" data-fix="${x.step}">${esc(x.message)} <u>Fix</u></button>`).join("")}</div>` : '<p class="pf-ready">Everything is ready to save.</p>'}
         <dl class="pf-summary">${rows.map(([label, value, step]) => `<div><dt>${label}</dt><dd>${esc(value)}</dd><button type="button" data-fix="${step}" aria-label="Edit ${label}">Edit</button></div>`).join("")}</dl>
-        ${noPhotos.length && state.colors.length > 1 ? `<p class="muted small">Tip: ${esc(noPhotos.join(", "))} ${noPhotos.length === 1 ? "has" : "have"} no photos yet. Customers will see the tee drawing in that colour.</p>` : ""}`;
+        ${noPhotos.length && state.colors.length > 1 ? `<p class="muted small">Tip: ${esc(noPhotos.join(", "))} ${noPhotos.length === 1 ? "has" : "have"} no photos yet. Customers will see ${state.category === "saree" ? "a saree drawing" : "the tee drawing"} in that colour.</p>` : ""}`;
       $("#pf-review").querySelectorAll("[data-fix]").forEach((b) => b.addEventListener("click", () => go(Number(b.dataset.fix))));
+    };
+
+    /* ---------- tee or saree ---------- */
+    const readDetails = () => ({
+      saree_type: el.d_saree_type.value.trim(),
+      fabric: el.d_fabric.value.trim(),
+      occasion: el.d_occasion.value,
+      work: el.d_work.value.trim(),
+      length_m: el.d_length_m.value ? Number(el.d_length_m.value) : null,
+      blouse_piece: el.d_blouse_piece.value === "yes",
+      care: el.d_care.value.trim(),
+    });
+    const applyCategory = () => {
+      state.category = el.category.value;
+      const text = STEP_TEXT[state.category];
+      modal.querySelectorAll("[data-for]").forEach((node) => { node.hidden = node.dataset.for !== state.category; });
+      modal.querySelectorAll(".pf-step").forEach((section) => {
+        const [title, hint] = text[Number(section.dataset.step)];
+        section.querySelector("[data-step-title]").textContent = title;
+        section.querySelector("[data-step-text]").textContent = hint;
+      });
+      modal.querySelectorAll("[data-go] span").forEach((label, i) => { label.textContent = text[i][0]; });
     };
 
     /* ---------- moving between steps ---------- */
@@ -381,7 +447,10 @@ export function productForm(product, ctx) {
       next();
     });
     form.addEventListener("input", changed);
-    form.addEventListener("change", (event) => { if (event.target.type === "radio") changed(); });
+    form.addEventListener("change", (event) => {
+      if (event.target.name === "category") applyCategory();
+      if (event.target.type === "radio" || event.target.tagName === "SELECT") changed();
+    });
 
     /* ---------- saving ---------- */
     const save = async () => {
@@ -393,7 +462,8 @@ export function productForm(product, ctx) {
       errorBox.hidden = true;
       if (list.length) return go(list[0].step);
       const button = $("#save");
-      const items = [state.back, state.front, ...state.colors.flatMap((c) => c.photos), ...state.shared].filter((item) => item?.file);
+      const saree = state.category === "saree";
+      const items = [...(saree ? [] : [state.back, state.front]), ...state.colors.flatMap((c) => c.photos), ...state.shared].filter((item) => item?.file);
       let sent = 0;
       state.saving = true;
       button.disabled = true;
@@ -414,16 +484,20 @@ export function productForm(product, ctx) {
           price_inr: Number(el.price_inr.value),
           compare_at_inr: el.compare_at_inr.value ? Number(el.compare_at_inr.value) : null,
           status: el.status.value,
-          gender: el.gender.value,
-          sizes: sizeChoices.filter((s) => state.sizes.has(s)),
+          category: state.category,
+          gender: saree ? "female" : el.gender.value,
+          sizes: saree ? [FREE_SIZE] : sizeChoices.filter((s) => state.sizes.has(s)),
+          details: saree ? Object.fromEntries(Object.entries(readDetails()).filter(([, v]) => v !== "" && v !== null)) : {},
           slug,
           colors: state.colors.map((c) => ({ name: c.name.trim(), hex: c.hex, images: c.photos.map((photo) => photo.src) })),
           gallery: state.shared.map((photo) => photo.src),
           model_image: null,
-          print_back: state.back.src,
-          print_file_back: state.back.src,
+          print_back: saree ? null : state.back.src,
+          print_file_back: saree ? null : state.back.src,
+          print_front: null,
+          print_file_front: null,
         };
-        if (state.front) {
+        if (state.front && !saree) {
           values.print_front = state.front.src;
           values.print_file_front = state.front.src;
         }
@@ -449,6 +523,7 @@ export function productForm(product, ctx) {
 
     drawColors();
     drawShared();
+    applyCategory();
     drawPreview();
     go(0);
     state.dirty = false;

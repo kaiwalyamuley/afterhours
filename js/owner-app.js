@@ -1,7 +1,7 @@
 // The owner console page. Only an owner account can load its data;
 // the database enforces that, and this gate explains it.
 import { api, DEMO } from "./api.js";
-import { esc, toast, GOOGLE_ICON } from "./ui.js";
+import { esc, toast, GOOGLE_ICON, wordmark } from "./ui.js";
 import { renderOwner, pendingCount, consoleTabs } from "./owner.js";
 import { pageSwap, markLogin, consumeLogin, playLogin } from "./motion.js";
 import { mountSide, unmountSide, drawSide, sideToggle } from "./side.js";
@@ -22,7 +22,7 @@ const hasStaffAccess = ({ owner, orders, products, settings }) => owner || order
 
 function drawNav() {
   nav.innerHTML = `<nav class="nav">
-    <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="Owner console"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a></div>
+    <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="Owner console">${wordmark()}</a></div>
     <div class="links">
       ${store.ownerPending ? `<a class="nav-alert" href="#/orders">Waiting<b class="pill">${store.ownerPending}</b></a>` : ""}
     </div>
@@ -48,8 +48,8 @@ function gate() {
   app.innerHTML = `<section class="gate">
     <div class="gate-grid" aria-hidden="true"></div>
     <div class="gate-card">
-      <img class="gate-logo" src="assets/brand/logo.webp" alt="AfterHours">
-      <div class="boot mono" aria-hidden="true"><p style="--i:0">AH//CONTROL</p><p style="--i:1">Owner sign-in required</p></div>
+      ${wordmark("gate-logo")}
+      <div class="boot mono" aria-hidden="true"><p style="--i:0">AfterHours console</p><p style="--i:1">Owner sign-in required</p></div>
       <h1>Owners only</h1>
       <button class="btn google wide" id="owner-signin">${DEMO ? "Enter practice console" : `${GOOGLE_ICON} Continue with Google`}</button>
       <p class="error" id="gate-error" hidden></p>
@@ -81,7 +81,7 @@ function denied() {
   app.innerHTML = `<section class="gate">
     <div class="gate-grid red" aria-hidden="true"></div>
     <div class="gate-card shake">
-      <img class="gate-logo" src="assets/brand/logo.webp" alt="AfterHours">
+      ${wordmark("gate-logo")}
       <h1>Access denied</h1>
       <p class="muted">${esc(store.profile.email)} does not have console access.</p>
       <button class="btn wide" id="switch">Use a different account</button>

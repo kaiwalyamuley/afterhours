@@ -1,5 +1,5 @@
 import { api, DEMO } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, GOOGLE_ICON, DEFAULT_SIZE_CHART, isSaree, productArt, sareeArt, SAREE_FACTS, factValue, sizeText, FREE_SIZE, wordmark } from "./ui.js";
 import { calm, pageSwap, reveal, bindTilt, flyToBag, autoScroll, markLogin, consumeLogin, playLogin, playOrderPlaced } from "./motion.js";
 import { mountSide, drawSide, sideToggle } from "./side.js";
 import { homeLayout } from "./home-layout.js";
@@ -41,7 +41,7 @@ function addToBag(productId, size, color = "") {
   if (line) line.quantity = Math.min(10, line.quantity + 1);
   else bag.push({ product_id: productId, size, color, quantity: 1 });
   writeBag();
-  toast(`Added to bag, size ${size}`);
+  toast(size === FREE_SIZE ? "Added to bag" : `Added to bag, size ${size}`);
 }
 
 function totals(lines) {
@@ -53,8 +53,8 @@ function totals(lines) {
 /* ---------- sign in ---------- */
 function signInModal(reason = "Sign in to place orders and track them.") {
   const label = DEMO ? "Enter practice store" : `${GOOGLE_ICON} Continue with Google`;
-  openModal(`<img class="modal-logo spray" src="assets/brand/logo-small.webp" alt="AfterHours">
-    <h2 class="clock-title">Clock in</h2><p class="muted">${esc(reason)}</p>
+  openModal(`${wordmark("modal-logo")}
+    <h2 class="clock-title">Welcome</h2><p class="muted">${esc(reason)}</p>
     <button class="btn google wide shine" id="google-signin">${label}</button>`, (modal, close) => {
     const button = modal.querySelector("#google-signin");
     button.addEventListener("click", async () => {
@@ -80,7 +80,8 @@ const firstName = () => (store.profile?.full_name || store.profile?.email || "th
 function drawNav() {
   const signedIn = Boolean(store.profile);
   document.getElementById("nav").innerHTML = `<nav class="nav">
-    <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="AfterHours home"><img src="assets/brand/logo-small.webp" alt="AfterHours"></a></div>
+    <div class="nav-left">${sideToggle()}<a class="brand" href="#/" aria-label="AfterHours home">${wordmark()}</a></div>
+    <div class="nav-cats" aria-label="Categories"><a href="#/sarees">Sarees</a><a href="#/tees">Custom tees</a><a href="#/shop">Shop all</a></div>
     <div class="links">
       <a class="bag-link" href="#/bag">Bag<b class="pill">${bagCount()}</b></a>
       ${signedIn ? "" : `<button class="btn small primary" id="sign-in">Sign in</button>`}
@@ -107,12 +108,13 @@ const paymentText = () => (hasUpi() && hasCod() ? "UPI or cash on delivery" : ha
 function drawCustomerSide() {
   const s = store.settings;
   const info = s.support_phone ? [{ label: "Helpline", value: s.support_phone, href: `tel:${s.support_phone.replace(/\s/g, "")}` }] : [];
-  const collections = [...new Set(visible().map((p) => p.collection))];
+  const collectionsOf = (category) => [...new Set(ofCategory(category).map((p) => p.collection))];
   drawSide({
     account: store.profile && { name: store.profile.full_name, email: store.profile.email, tag: store.profile.email },
     links: [
       { href: "#/", label: "Home", icon: "home" },
-      { label: "Shop by collection", icon: "shop", children: [{ href: "#/shop", label: "All graphics" }, ...collections.map((c) => ({ href: `#/shop/${encodeURIComponent(c)}`, label: c }))] },
+      { label: "Sarees", icon: "saree", children: [{ href: "#/sarees", label: "All sarees" }, ...collectionsOf("saree").map((c) => ({ href: `#/sarees/${encodeURIComponent(c)}`, label: c }))] },
+      { label: "Custom tees", icon: "shop", children: [{ href: "#/tees", label: "All tees" }, ...collectionsOf("tee").map((c) => ({ href: `#/tees/${encodeURIComponent(c)}`, label: c }))] },
       { href: "#/orders", label: "My orders", icon: "orders", badge: store.activeOrders || "" },
       ...(activeTiers().length ? [{ href: "#/membership", label: "Membership", icon: "crown" }] : []),
       { href: "#/help", label: "Help and contact", icon: "help" },
@@ -125,27 +127,29 @@ function drawCustomerSide() {
 function drawFooter() {
   const s = store.settings;
   document.getElementById("footer").innerHTML = `<div class="foot">
-    <img src="assets/brand/logo-small.webp" alt="AfterHours Streetwear Co.">
-    <div class="foot-text">
-      <p class="mono muted">Every tee is printed after you order it.</p>
-      ${s.business_address ? `<p class="muted small">AfterHours Streetwear Co., ${esc(s.business_address)}</p>` : ""}
+    <div class="foot-brand">${wordmark()}
+      <p class="muted">Handpicked sarees for every celebration, and custom tees printed after you order.</p>
+      ${s.business_address ? `<p class="muted small">AfterHours, ${esc(s.business_address)}</p>` : ""}
     </div>
-    <nav class="foot-links" aria-label="Footer">
-      <a class="foot-link" href="privacy.html">Privacy Policy</a>
-      ${s.instagram_url ? `<a class="foot-link" href="${esc(s.instagram_url)}" target="_blank" rel="noopener">Instagram</a>` : ""}
+    <nav class="foot-col" aria-label="Shop"><strong>Shop</strong><a href="#/sarees">Sarees</a><a href="#/tees">Custom tees</a><a href="#/shop">Everything</a></nav>
+    <nav class="foot-col" aria-label="Help"><strong>Help</strong><a href="#/orders">My orders</a><a href="#/help">Contact us</a>
+      <a href="privacy.html">Privacy Policy</a>
+      ${s.instagram_url ? `<a href="${esc(s.instagram_url)}" target="_blank" rel="noopener">Instagram</a>` : ""}
     </nav>
+    <p class="foot-legal muted small">© ${new Date().getFullYear()} AfterHours. Pay by ${esc(paymentText())}.</p>
   </div>`;
 }
 
 const paymentTrust = () => {
   if (hasUpi() && hasCod()) return ["Pay your way", "Pay by UPI, or cash when it arrives."];
-  if (hasUpi()) return ["Pay by UPI", "We confirm your payment before printing."];
+  if (hasUpi()) return ["Pay by UPI", "We confirm your payment before we prepare your order."];
   return ["Pay when it arrives", "Cash on delivery. No card or UPI needed to order."];
 };
 
 const trustItems = () => [
   paymentTrust(),
-  ["Printed just for you", "Your tee goes to print after your order is accepted."],
+  ["Handpicked sarees", "Every saree is checked for colour, weave and finish before it ships."],
+  ["Tees printed for you", "Your tee goes to print after your order is accepted."],
   ["Cancel before we accept", "Cancel an unpaid order yourself, or contact us about a paid one."],
   ["Follow every step", "See it move from accepted to printing to delivered."],
   ["Safe Google sign-in", "We never see or store your Google password."],
@@ -154,42 +158,66 @@ const trustItems = () => [
 const trustStrip = () => `<section class="trust" aria-label="Why shop with AfterHours">${trustItems().map(([title, text]) => `<div><strong>${title}</strong><span class="muted">${text}</span></div>`).join("")}</section>`;
 
 /* ---------- catalogue pieces ---------- */
+const CATEGORY = {
+  saree: { one: "saree", many: "sarees", title: "Sarees", path: "#/sarees", label: "Saree" },
+  tee: { one: "tee", many: "tees", title: "Custom tees", path: "#/tees", label: "Custom tee" },
+};
+const categoryOf = (p) => (isSaree(p) ? "saree" : "tee");
+const offPct = (p) => (p.compare_at_inr > p.price_inr ? Math.round((1 - p.price_inr / p.compare_at_inr) * 100) : 0);
+const sareeLine = (p) => [...new Set([p.details?.saree_type, p.details?.fabric].filter(Boolean))].join(" · ");
+
 function card(p) {
-  const off = p.compare_at_inr > p.price_inr ? Math.round((1 - p.price_inr / p.compare_at_inr) * 100) : 0;
+  const off = offPct(p);
   const soon = p.status === "coming_soon";
-  return `<a class="card" href="#/p/${esc(p.slug)}">
+  const saree = isSaree(p);
+  const first = p.colors?.[0];
+  let art;
+  if (saree) {
+    const second = [...(first?.images || []), ...(p.gallery || [])][1];
+    art = second
+      ? `<div class="flip"><div class="side a">${productArt(p)}</div><div class="side b"><img class="photo" src="${esc(second)}" alt="" loading="lazy"></div></div>`
+      : productArt(p);
+  } else {
+    art = `<div class="flip tee-flip"><div class="side a">${tee(p, "back", false, first?.hex)}</div><div class="side b">${tee(p, "front", false, first?.hex)}</div></div>`;
+  }
+  const reviews = reviewsFor(p.id);
+  return `<a class="card ${saree ? "is-saree" : "is-tee"}" href="#/p/${esc(p.slug)}">
     <div class="card-art">
-      <span class="tag mono">${esc(soon ? "Coming soon" : p.collection)}</span>
-      <div class="flip"><div class="side a">${tee(p, "back", false, p.colors?.[0]?.hex)}</div><div class="side b">${tee(p, "front", false, p.colors?.[0]?.hex)}</div></div>
+      <span class="tag">${esc(soon ? "Coming soon" : p.collection)}</span>
+      ${off && !soon ? `<span class="off-badge">${off}% off</span>` : ""}
+      ${art}
     </div>
     <div class="card-info">
+      <span class="card-cat">${CATEGORY[categoryOf(p)].label}</span>
       <h3>${esc(p.name)}</h3>
-      <p class="muted">${esc(p.tagline)}</p>
-      ${reviewsFor(p.id).length ? `<p class="card-rating"><b>★</b> ${averageRating(reviewsFor(p.id))} <span class="muted">(${reviewsFor(p.id).length})</span></p>` : ""}
-      <p class="price">${money(p.price_inr)}${off ? ` <s>${money(p.compare_at_inr)}</s> <em>${off}% off</em>` : ""}</p>
+      <p class="muted">${esc((saree && sareeLine(p)) || p.tagline)}</p>
+      ${reviews.length ? `<p class="card-rating"><b>★</b> ${averageRating(reviews)} <span class="muted">(${reviews.length})</span></p>` : ""}
+      <p class="price">${money(p.price_inr)}${off ? ` <s>${money(p.compare_at_inr)}</s>` : ""}</p>
       ${p.colors?.length > 1 ? `<div class="dots" role="img" aria-label="${p.colors.length} colours">${p.colors.slice(0, 6).map((c) => `<i style="--c:${esc(c.hex)}"></i>`).join("")}</div>` : ""}
     </div>
   </a>`;
 }
 
 const visible = () => store.products.filter((p) => p.status !== "hidden");
-const grid = (items) => `<div class="grid">${items.map(card).join("") || '<p class="muted">Nothing here yet.</p>'}</div>`;
+const ofCategory = (category) => visible().filter((p) => categoryOf(p) === category);
+const grid = (items, empty = "Nothing here yet.") => `<div class="grid">${items.map(card).join("") || `<p class="muted">${esc(empty)}</p>`}</div>`;
 
 function priceRow(collection) {
   const items = visible().filter((p) => p.collection === collection);
   if (!items.length) return "";
   const lowest = Math.min(...items.map((p) => p.price_inr));
-  const count = `${items.length} graphic${items.length === 1 ? "" : "s"}`;
-  return `<div class="tier"><span class="mono muted">${esc(collection)}</span><strong>${money(lowest)}</strong><span class="muted">Starting price, ${count}</span></div>`;
+  const kind = CATEGORY[categoryOf(items[0])];
+  const count = `${items.length} ${items.length === 1 ? kind.one : kind.many}`;
+  return `<div class="tier"><span class="kicker">${esc(collection)}</span><strong>${money(lowest)}</strong><span class="muted">Starting price, ${count}</span></div>`;
 }
 
 function pricing() {
   const collections = [...new Set(visible().map((p) => p.collection))];
   const { shipping_inr: fee, free_shipping_over: free } = store.settings;
   return `<section class="section" id="pricing">
-    <div class="head"><span class="mono kicker">Pricing</span><h2>One tee. One price.</h2></div>
+    <div class="head center"><span class="kicker">Pricing</span><h2>Prices at a glance</h2></div>
     <div class="tiers">${collections.map(priceRow).join("")}
-      <div class="tier hot"><span class="mono">Shipping</span><strong>${fee ? money(fee) : "Free"}</strong><span>${fee ? `free on orders over ${money(free)}` : "on every order"}</span></div>
+      <div class="tier hot"><span class="kicker">Shipping</span><strong>${fee ? money(fee) : "Free"}</strong><span>${fee ? `free on orders over ${money(free)}` : "on every order"}</span></div>
     </div>
   </section>`;
 }
@@ -197,48 +225,80 @@ function pricing() {
 function lookbook() {
   const photos = Array.from({ length: 12 }, (_, i) => `assets/lookbook/${String(i + 1).padStart(2, "0")}.webp`);
   return `<section class="section">
-    <div class="head"><span class="mono kicker">Lookbook</span><h2>Seen after dark.</h2></div>
-    <div class="lookbook" tabindex="0" aria-label="Lookbook photos">${photos.map((src) => `<img src="${src}" alt="Model wearing an AfterHours logo tee at night" loading="lazy">`).join("")}</div>
+    <div class="head center"><span class="kicker">Lookbook</span><h2>Custom tees, worn after hours</h2></div>
+    <div class="lookbook" tabindex="0" aria-label="Lookbook photos">${photos.map((src) => `<img src="${src}" alt="Model wearing an AfterHours graphic tee" loading="lazy">`).join("")}</div>
   </section>`;
 }
 
 function howItWorks() {
   const steps = [
-    ["Pick a graphic", "Choose your print and your size."],
-    ["We confirm it", "Your order gets checked and accepted."],
-    ["We print it", "Your tee goes to press only after you order."],
-    ["It ships to you", "Track every step from your orders page."],
+    ["Choose", "Pick a saree, or a tee graphic in your colour and size."],
+    ["We confirm", "We check your order and accept it, usually the same day."],
+    ["We prepare it", "Sarees are checked and packed. Tees are printed just for you."],
+    ["Delivered", "Track every step from your orders page until it arrives."],
   ];
   return `<section class="section">
-    <div class="head"><span class="mono kicker">How it works</span><h2>Printed after you order.</h2></div>
-    <ol class="steps">${steps.map(([t, d], i) => `<li><span class="mono">0${i + 1}</span><h3>${t}</h3><p class="muted">${d}</p></li>`).join("")}</ol>
+    <div class="head center"><span class="kicker">How it works</span><h2>From our hands to yours</h2></div>
+    <ol class="steps">${steps.map(([t, d], i) => `<li><span class="step-no">${i + 1}</span><h3>${t}</h3><p class="muted">${d}</p></li>`).join("")}</ol>
   </section>`;
 }
 
 /* ---------- pages ---------- */
 const PREVIEW = new URLSearchParams(location.search).has("preview");
+const newestOf = (items) => [...items].sort((a, b) => b.sort - a.sort)[0];
 
 function hero(layout) {
-  const newest = [...visible()].sort((a, b) => b.sort - a.sort)[0];
-  const pick = visible().find((p) => p.slug === layout.product) || newest;
+  const featured = visible().find((p) => p.slug === layout.product);
+  const saree = featured && isSaree(featured) ? featured : newestOf(ofCategory("saree"));
+  const teePick = featured && !isSaree(featured) ? featured : newestOf(ofCategory("tee"));
+  const { free_shipping_over: free, shipping_inr: fee } = store.settings;
+  const points = [hasCod() ? "Cash on delivery" : "Easy UPI payment", fee ? `Free shipping over ${money(free)}` : "Free shipping", "Track every order"];
   const copy = !store.profile || PREVIEW
-    ? { kicker: esc(layout.kicker), title: `${esc(layout.line1)}<br><span>${esc(layout.line2)}</span>`, body: esc(layout.text),
-        cta: `<button class="btn primary" id="hero-signin">Sign in to order</button><a class="btn" href="#/shop">Browse the drop</a>` }
-    : { kicker: "You're clocked in", title: `Welcome back,<br><span>${esc(firstName())}.</span>`, body: "The latest drop is below, and your orders are one tap away.",
-        cta: `<a class="btn primary" href="#/shop">Shop the drop</a><a class="btn" href="#/orders">Track orders</a>` };
+    ? { kicker: esc(layout.kicker), title: `${esc(layout.line1)}<br><em>${esc(layout.line2)}</em>`, body: esc(layout.text) }
+    : { kicker: "Welcome back", title: `Namaste,<br><em>${esc(firstName())}.</em>`, body: "New sarees and fresh prints are waiting below. Your orders are one tap away." };
   return `<section class="hero">
     <div class="hero-copy">
-      <img class="hero-logo spray" src="assets/brand/logo.webp" alt="AfterHours Streetwear Co.">
-      <span class="mono kicker">${copy.kicker}</span>
+      <span class="kicker">${copy.kicker}</span>
       <h1>${copy.title}</h1>
       <p class="lead">${copy.body}</p>
-      <div class="row">${copy.cta}</div>
+      <div class="row"><a class="btn primary" href="#/sarees">Shop sarees</a><a class="btn" href="#/tees">Shop custom tees</a></div>
+      <ul class="hero-points">${points.map((t) => `<li>${esc(t)}</li>`).join("")}</ul>
     </div>
     <div class="hero-art">
-      <div class="hud mono"><span>REC ●</span><span>${visible().length} GRAPHICS LIVE</span></div>
-      <div class="float"><div class="scan" aria-hidden="true"></div>${pick ? tee(pick, "back", true) : ""}</div>
-      ${pick ? `<a class="hud-tag" href="#/p/${esc(pick.slug)}"><b>${esc(pick.name)}</b><span>${money(pick.price_inr)}</span></a>` : ""}
+      <a class="hero-tile tile-saree" href="${saree ? `#/p/${esc(saree.slug)}` : "#/sarees"}">
+        <div class="hero-pic">${saree ? productArt(saree, { eager: true }) : sareeArt("#8C1C2B")}</div>
+        <span class="hero-label"><small>${saree ? esc(saree.collection) : "New in"}</small><b>${saree ? esc(saree.name) : "Sarees"}</b>${saree ? `<em>${money(saree.price_inr)}</em>` : ""}</span>
+      </a>
+      <a class="hero-tile tile-tee" href="${teePick ? `#/p/${esc(teePick.slug)}` : "#/tees"}">
+        <div class="hero-pic">${teePick ? tee(teePick, "back", true, teePick.colors?.[0]?.hex) : tee({}, "back", true)}</div>
+        <span class="hero-label"><small>Printed to order</small><b>${teePick ? esc(teePick.name) : "Custom tees"}</b>${teePick ? `<em>${money(teePick.price_inr)}</em>` : ""}</span>
+      </a>
     </div>
+  </section>`;
+}
+
+function categories() {
+  const sarees = ofCategory("saree");
+  const tees = ofCategory("tee");
+  const sareePick = newestOf(sarees);
+  const teePick = newestOf(tees);
+  const occasions = [...new Set(sarees.map((p) => p.details?.occasion).filter(Boolean))];
+  const count = (items, kind) => (items.length ? `${items.length} ${items.length === 1 ? kind.one : kind.many}` : "Arriving soon");
+  return `<section class="section cats">
+    <div class="head center"><span class="kicker">Shop by category</span><h2>Two wardrobes, one store</h2></div>
+    <div class="cat-grid">
+      <a class="cat cat-saree" href="#/sarees">
+        <div class="cat-art">${sareePick ? productArt(sareePick) : sareeArt("#8C1C2B")}</div>
+        <div class="cat-copy"><span class="kicker">${count(sarees, CATEGORY.saree)}</span><h3>Sarees</h3>
+          <p>Traditional silks for weddings and festivals, and light casual drapes for every day.</p><span class="cat-cta">Shop sarees →</span></div>
+      </a>
+      <a class="cat cat-tee" href="#/tees">
+        <div class="cat-art">${tee(teePick || {}, "back", false, teePick?.colors?.[0]?.hex)}</div>
+        <div class="cat-copy"><span class="kicker">${count(tees, CATEGORY.tee)}</span><h3>Custom tees</h3>
+          <p>Original graphics printed in your colour and size, the moment you order.</p><span class="cat-cta">Shop tees →</span></div>
+      </a>
+    </div>
+    ${occasions.length ? `<div class="occasions"><span class="muted small">Sarees for</span>${occasions.map((o) => `<a class="chip" href="#/sarees/${encodeURIComponent(o)}">${esc(o)}</a>`).join("")}</div>` : ""}
   </section>`;
 }
 
@@ -281,7 +341,7 @@ async function pageMembership() {
       <li>A member discount can't be combined with a coupon. You always get whichever saves you more.</li>
       ${upi ? `<li>Paying in full by UPI still saves you an extra ${store.settings.prepaid_discount_pct}%.</li>` : ""}
     </ul>
-    <div class="row member-cta"><a class="btn primary" href="#/shop">Shop the drop</a></div>
+    <div class="row member-cta"><a class="btn primary" href="#/shop">Start shopping</a></div>
   </section>`;
   document.getElementById("member-signin")?.addEventListener("click", () => signInModal());
 }
@@ -296,15 +356,22 @@ async function activeOrderStrip() {
 
 async function pageHome() {
   const layout = homeLayout(store.settings.home_layout);
-  // The owner's chosen collections, or the newest three, each showing up to four tees.
+  // The owner's chosen collections, or the newest three, each showing up to four products.
   const latestSort = (name) => Math.max(...visible().filter((p) => p.collection === name).map((p) => p.sort));
   const newestFirst = [...new Set(visible().map((p) => p.collection))].sort((a, b) => latestSort(b) - latestSort(a));
   const chosen = newestFirst.filter((name) => layout.collections.includes(name));
   const collections = chosen.length ? chosen : newestFirst.slice(0, 3);
-  const collectionRows = collections.map((name) => `<section class="section"><div class="head"><span class="mono kicker">Collection</span><h2>${esc(name)}</h2><a class="more" href="#/shop/${encodeURIComponent(name)}">See all</a></div>${grid(visible().filter((p) => p.collection === name).slice(0, 4))}</section>`).join("");
-  const marquee = Array(8).fill("PRINTED TO ORDER ✦ AFTER DARK ONLY ✦ ").join("");
+  const collectionRows = collections.map((name) => {
+    const items = visible().filter((p) => p.collection === name);
+    const kind = CATEGORY[categoryOf(items[0])];
+    return `<section class="section"><div class="head"><span class="kicker">${kind.title} collection</span><h2>${esc(name)}</h2><a class="more" href="${kind.path}/${encodeURIComponent(name)}">See all</a></div>${grid(items.slice(0, 4))}</section>`;
+  }).join("");
+  const { shipping_inr: fee, free_shipping_over: free } = store.settings;
+  const words = ["Handpicked sarees", "Custom tees printed to order", fee ? `Free shipping over ${money(free)}` : "Free shipping", hasCod() ? "Cash on delivery" : "Easy UPI payment", "Wedding · Festive · Everyday"];
+  const marquee = Array(4).fill(words.map((w) => `<span>${esc(w)}</span>`).join("<i>✦</i>")).join("<i>✦</i>");
   const parts = {
-    marquee: () => `<div class="marquee mono" aria-hidden="true"><div>${marquee}</div></div>`,
+    categories,
+    marquee: () => `<div class="marquee" aria-hidden="true"><div>${marquee}<i>✦</i>${marquee}</div></div>`,
     trust: trustStrip,
     member: memberStrip,
     collections: () => collectionRows,
@@ -314,75 +381,128 @@ async function pageHome() {
   };
   app.innerHTML = `${layout.banner.on && layout.banner.text ? `<p class="announce">${esc(layout.banner.text)}</p>` : ""}${hero(layout.hero)}<div id="strip"></div>
     ${layout.sections.filter((s) => s.on).map((s) => parts[s.id]()).join("")}`;
-  document.getElementById("hero-signin")?.addEventListener("click", () => signInModal());
   const lookbookStrip = app.querySelector(".lookbook");
   if (lookbookStrip) autoScroll(lookbookStrip);
+  reveal(app);
   const strip = await activeOrderStrip().catch(() => "");
   const slot = document.getElementById("strip");
   if (slot) slot.innerHTML = strip;
 }
 
-let shopFor = "all";
+const shop = { for: "all", sort: "featured" };
+const SORTS = [["featured", "Featured"], ["new", "Newest"], ["low", "Price: low to high"], ["high", "Price: high to low"]];
+const sorted = (items) => {
+  const list = [...items];
+  if (shop.sort === "new") return list.sort((a, b) => b.sort - a.sort);
+  if (shop.sort === "low") return list.sort((a, b) => a.price_inr - b.price_inr);
+  if (shop.sort === "high") return list.sort((a, b) => b.price_inr - a.price_inr);
+  return list;
+};
 
-function pageShop(collection = "") {
-  const items = visible().filter((p) => (!collection || p.collection === collection) && (shopFor === "all" || p.gender === shopFor || p.gender === "unisex"));
-  app.innerHTML = `<section class="section first">
-    <div class="head"><span class="mono kicker">The catalogue</span><h2>${esc(collection || "All graphics")}</h2></div>
-    <div class="chips">${[["all", "All"], ["male", "Male"], ["female", "Female"]].map(([value, label]) => `<button class="chip ${value === shopFor ? "on" : ""}" data-for="${value}">${label}</button>`).join("")}</div>
-    ${grid(items)}
+/** category is "", "saree" or "tee". filter is a collection, or for sarees an occasion or saree type. */
+function pageShop(category = "", filter = "") {
+  const base = category ? ofCategory(category) : visible();
+  const matches = (p) => !filter || p.collection === filter || p.details?.occasion === filter || p.details?.saree_type === filter;
+  let items = base.filter(matches);
+  if (category === "tee") items = items.filter((p) => shop.for === "all" || p.gender === shop.for || p.gender === "unisex");
+  const kind = CATEGORY[category];
+  const title = filter ? (kind ? `${filter} ${kind.many}` : filter) : kind ? kind.title : "Shop everything";
+  const intro = {
+    saree: "Banarasi and Kanjeevaram silks for the big day, and soft cottons and georgettes for every other day.",
+    tee: "Original graphics, printed on your colour and size after you order. No warehouse, no leftovers.",
+  }[category] || "Handpicked sarees and custom printed tees, all in one place.";
+  const sareeFilters = category === "saree" ? [...new Set(base.flatMap((p) => [p.details?.occasion, p.details?.saree_type]).filter(Boolean))] : [];
+  const href = (cat, f = "") => `${CATEGORY[cat]?.path || "#/shop"}${f ? `/${encodeURIComponent(f)}` : ""}`;
+  const empty = category === "saree" && !base.length ? "Our first saree collection is arriving soon. Check back in a few days." : "Nothing here yet.";
+  app.innerHTML = `<section class="shop-head head-${category || "all"}">
+      <span class="kicker">${kind ? "Shop by category" : "The catalogue"}</span>
+      <h1>${esc(title)}</h1>
+      <p class="lead">${esc(intro)}</p>
+    </section>
+    <section class="section first">
+    <div class="shop-bar">
+      <div class="chips">
+        ${[["", "All"], ["saree", "Sarees"], ["tee", "Custom tees"]].map(([value, label]) => `<a class="chip ${value === category && !filter ? "on" : ""}" href="${href(value)}">${label}</a>`).join("")}
+        ${sareeFilters.map((f) => `<a class="chip ${f === filter ? "on" : ""}" href="${href("saree", f)}">${esc(f)}</a>`).join("")}
+        ${category === "tee" ? `<span class="chip-gap"></span>${[["all", "Everyone"], ["male", "Men"], ["female", "Women"]].map(([value, label]) => `<button class="chip ${value === shop.for ? "on" : ""}" data-for="${value}">${label}</button>`).join("")}` : ""}
+      </div>
+      <label class="sort"><span class="muted small">Sort</span><select id="sort">${SORTS.map(([v, l]) => `<option value="${v}" ${v === shop.sort ? "selected" : ""}>${l}</option>`).join("")}</select></label>
+    </div>
+    <p class="muted small count">${items.length} ${items.length === 1 ? "product" : "products"}</p>
+    ${grid(sorted(items), empty)}
   </section>`;
   app.querySelectorAll("[data-for]").forEach((b) => b.addEventListener("click", () => {
-    shopFor = b.dataset.for;
-    pageShop(collection);
+    shop.for = b.dataset.for;
+    pageShop(category, filter);
   }));
+  document.getElementById("sort").addEventListener("change", (event) => {
+    shop.sort = event.target.value;
+    pageShop(category, filter);
+  });
   reveal(app);
 }
 
 function pageProduct(slug) {
   const p = visible().find((x) => x.slug === slug);
   if (!p) return notFound();
+  const saree = isSaree(p);
   const colors = p.colors || [];
   let color = colors[0] || null;
-  const fixedSlides = [{ side: "back", label: "Back" }, { side: "front", label: "Front" }];
+  const fixedSlides = saree ? [] : [{ side: "back", label: "Back" }, { side: "front", label: "Front" }];
   if (p.model_image) fixedSlides.push({ src: p.model_image, label: "On model" });
   (p.gallery || []).forEach((src, i) => fixedSlides.push({ src, label: `Photo ${i + 1}` }));
-  const slidesFor = (c) => [...(c?.images || []).map((src, i) => ({ src, label: `${c.name} photo ${i + 1}` })), ...fixedSlides];
+  const slidesFor = (c) => {
+    const list = [...(c?.images || []).map((src, i) => ({ src, label: `${c.name} photo ${i + 1}` })), ...fixedSlides];
+    return list.length ? list : [{ art: true, label: "Saree" }];
+  };
   let slides = slidesFor(color);
-  const slideView = (s) => (s.src ? `<img class="model" src="${esc(s.src)}" alt="${esc(p.name)}: ${esc(s.label)}">` : tee(p, s.side, true, color?.hex));
-  const thumbView = (s) => (s.src ? `<img src="${esc(s.src)}" alt="" loading="lazy">` : tee(p, s.side, false, color?.hex));
+  const slideView = (s) => (s.src ? `<img class="model" src="${esc(s.src)}" alt="${esc(p.name)}: ${esc(s.label)}">` : s.art ? sareeArt(color?.hex) : tee(p, s.side, true, color?.hex));
+  const thumbView = (s) => (s.src ? `<img src="${esc(s.src)}" alt="" loading="lazy">` : s.art ? sareeArt(color?.hex) : tee(p, s.side, false, color?.hex));
   const reviews = reviewsFor(p.id);
   const live = p.status === "live";
-  app.innerHTML = `<section class="section first pdp">
+  const off = offPct(p);
+  const facts = saree ? SAREE_FACTS.map(([key, label]) => [label, factValue(key, p.details?.[key])]).filter(([, value]) => value) : [];
+  const assure = saree
+    ? [
+      "Handpicked and checked before it ships",
+      "Free size: one saree drapes every body",
+      p.details?.blouse_piece === true ? "Comes with an unstitched blouse piece" : "",
+      `Pay by ${paymentText()} (shipping ${shippingText()})`,
+    ]
+    : [
+      colors.length > 1 ? "Printed to order" : `Printed to order on a ${(colors[0]?.name || "black").toLowerCase()} tee`,
+      `Pay by ${paymentText()} (shipping ${shippingText()})`,
+    ];
+  if (store.settings.delivery_note) assure.push(store.settings.delivery_note);
+  app.innerHTML = `<nav class="crumbs" aria-label="Breadcrumb"><a href="#/">Home</a><span>/</span><a href="${CATEGORY[categoryOf(p)].path}">${CATEGORY[categoryOf(p)].title}</a><span>/</span><span>${esc(p.name)}</span></nav>
+  <section class="section first pdp ${saree ? "is-saree" : "is-tee"}">
     <div class="gallery">
       <div class="stage" id="stage">${slideView(slides[0])}</div>
       <div class="thumbs" id="thumbs"></div>
     </div>
     <div class="buy">
-      <span class="mono kicker">${esc(p.collection)}</span>
+      <span class="kicker">${esc(p.collection)}</span>
       <h1>${esc(p.name)}</h1>
-      <p class="lead">${esc(p.tagline)}</p>
+      ${p.tagline ? `<p class="lead">${esc(p.tagline)}</p>` : ""}
       ${reviews.length ? `<a class="rating-link" href="#reviews-section" id="rating-link">${starRow(Math.round(averageRating(reviews)))} ${averageRating(reviews)} (${reviews.length} review${reviews.length === 1 ? "" : "s"})</a>` : ""}
-      <p class="price big">${money(p.price_inr)}${p.compare_at_inr > p.price_inr ? ` <s>${money(p.compare_at_inr)}</s>` : ""}</p>
-      <p class="muted">${esc(p.description)}</p>
-      ${live && colors.length > 1 ? `<span class="mono label">Colour: <b id="color-name">${esc(color.name)}</b></span>
+      <p class="price big">${money(p.price_inr)}${off ? ` <s>${money(p.compare_at_inr)}</s> <em>${off}% off</em>` : ""}</p>
+      <p class="muted small tax">Inclusive of all taxes</p>
+      ${live && colors.length > 1 ? `<span class="label">Colour: <b id="color-name">${esc(color.name)}</b></span>
       <div class="swatches">${colors.map((c, i) => `<button class="swatch ${i ? "" : "on"}" data-color="${i}" style="--c:${esc(c.hex)}" title="${esc(c.name)}" aria-label="${esc(c.name)}" aria-pressed="${!i}"></button>`).join("")}</div>` : ""}
-      ${live ? `<div class="size-head"><span class="mono label">Size</span><button type="button" class="size-guide" id="size-guide">Size guide</button></div>
-      <div class="sizes">${p.sizes.map((s, i) => `<button class="size ${i === 1 ? "on" : ""}" data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>
-      <div class="row"><button class="btn primary" id="add">Add to bag</button><button class="btn" id="buy">Buy now</button></div>`
-      : `<p class="notice mono">Coming soon</p>`}
-      <ul class="assure">
-        <li>${colors.length > 1 ? "Printed to order" : `Printed to order on a ${esc((colors[0]?.name || "black").toLowerCase())} tee`}</li>
-        <li>Pay by ${esc(paymentText())} (shipping ${esc(shippingText())})</li>
-        ${store.settings.delivery_note ? `<li>${esc(store.settings.delivery_note)}</li>` : ""}
-        <li>Questions? <a href="#/help">Contact us</a></li>
-      </ul>
+      ${live && !saree ? `<div class="size-head"><span class="label">Size</span><button type="button" class="size-guide" id="size-guide">Size guide</button></div>
+      <div class="sizes">${p.sizes.map((s, i) => `<button class="size ${i === 1 ? "on" : ""}" data-s="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : ""}
+      ${live ? `<div class="row buy-row"><button class="btn primary" id="add">Add to bag</button><button class="btn" id="buy">Buy now</button></div>` : `<p class="notice">Coming soon</p>`}
+      ${p.description ? `<p class="desc">${esc(p.description)}</p>` : ""}
+      ${facts.length ? `<dl class="facts">${facts.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>` : ""}
+      <ul class="assure">${assure.filter(Boolean).map((t) => `<li>${esc(t)}</li>`).join("")}<li>Questions? <a href="#/help">Contact us</a></li></ul>
     </div>
   </section>
   <section class="section reviews" id="reviews-section">
-    <div class="head"><span class="mono kicker">From verified buyers</span><h2>Reviews</h2></div>
+    <div class="head"><span class="kicker">From verified buyers</span><h2>Reviews</h2></div>
     ${reviews.length ? `<div class="review-list">${reviews.slice(0, 20).map((r) => `<article class="panel review">${starRow(r.rating)}${r.comment ? `<p>${esc(r.comment)}</p>` : ""}<p class="muted small">${esc(r.reviewer_name)} · Verified buyer · ${new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}</p></article>`).join("")}</div>`
     : '<p class="muted">No reviews yet. Customers can leave a review from their orders page after delivery.</p>'}
-  </section>`;
+  </section>
+  ${related(p)}`;
   const stage = document.getElementById("stage");
   const thumbs = document.getElementById("thumbs");
   let current = 0;
@@ -397,7 +517,7 @@ function pageProduct(slug) {
     });
   };
   const drawThumbs = () => {
-    thumbs.innerHTML = slides.map((s, i) => `<button class="thumb-btn ${i === current ? "on" : ""}" data-slide="${i}" aria-label="Show ${esc(s.label)}" title="${esc(s.label)}">${thumbView(s)}</button>`).join("");
+    thumbs.innerHTML = slides.length > 1 ? slides.map((s, i) => `<button class="thumb-btn ${i === current ? "on" : ""}" data-slide="${i}" aria-label="Show ${esc(s.label)}" title="${esc(s.label)}">${thumbView(s)}</button>`).join("") : "";
   };
   drawThumbs();
   thumbs.addEventListener("click", (event) => {
@@ -422,7 +542,8 @@ function pageProduct(slug) {
       showSlide((current + 1) % slides.length);
     }, 3500);
   }
-  let size = p.sizes[1] || p.sizes[0];
+  // Sarees sell as one free size; older saree rows without it fall back to their first size.
+  let size = saree ? (p.sizes.includes(FREE_SIZE) ? FREE_SIZE : p.sizes[0]) : p.sizes[1] || p.sizes[0];
   app.querySelectorAll("[data-s]").forEach((b) => b.addEventListener("click", () => {
     size = b.dataset.s;
     app.querySelectorAll("[data-s]").forEach((x) => x.classList.toggle("on", x === b));
@@ -446,6 +567,14 @@ function pageProduct(slug) {
     flyToBag(stage.firstElementChild);
   });
   document.getElementById("buy")?.addEventListener("click", () => { addToBag(p.id, size, color?.hex || ""); location.hash = "#/checkout"; });
+  reveal(app);
+}
+
+/** More from the same category, newest first. */
+function related(p) {
+  const items = ofCategory(categoryOf(p)).filter((x) => x.id !== p.id).sort((a, b) => (b.collection === p.collection) - (a.collection === p.collection) || b.sort - a.sort).slice(0, 4);
+  if (!items.length) return "";
+  return `<section class="section"><div class="head"><span class="kicker">You may also like</span><h2>More ${CATEGORY[categoryOf(p)].many}</h2><a class="more" href="${CATEGORY[categoryOf(p)].path}">See all</a></div>${grid(items)}</section>`;
 }
 
 function showSizeGuide(selected) {
@@ -472,14 +601,14 @@ function summary(lines) {
 function pageBag() {
   const lines = bagLines();
   if (!lines.length) {
-    app.innerHTML = `<section class="section first empty"><h2>Your bag is empty.</h2><a class="btn primary" href="#/shop">Browse the drop</a></section>`;
+    app.innerHTML = `<section class="section first empty"><h2>Your bag is empty</h2><p class="muted">Sarees and custom tees are waiting for you.</p><div class="row"><a class="btn primary" href="#/sarees">Shop sarees</a><a class="btn" href="#/tees">Shop custom tees</a></div></section>`;
     return;
   }
   app.innerHTML = `<section class="section first two">
     <div><div class="head"><h2>Your bag</h2></div>
       ${lines.map((l) => `<div class="line" data-p="${esc(l.product_id)}" data-s="${esc(l.size)}" data-c="${esc(l.color || "")}">
-        <div class="thumb">${l.choice?.images?.[0] ? `<img src="${esc(l.choice.images[0])}" alt="">` : tee(l.product, "back", false, l.choice?.hex)}</div>
-        <div class="grow"><h3>${esc(l.product.name)}</h3><p class="mono muted">Size ${esc(l.size)}</p>${colorTag(l.choice?.name, l.choice?.hex)}<p class="price">${money(l.product.price_inr)}</p></div>
+        <div class="thumb">${l.choice?.images?.[0] ? `<img src="${esc(l.choice.images[0])}" alt="">` : productArt(l.product, { color: l.choice, hex: l.choice?.hex })}</div>
+        <div class="grow"><h3>${esc(l.product.name)}</h3><p class="muted small">${esc(sizeText(l.size))}</p>${colorTag(l.choice?.name, l.choice?.hex)}<p class="price">${money(l.product.price_inr)}</p></div>
         <div class="qty"><button aria-label="Fewer" data-d="-1">−</button><span>${l.quantity}</span><button aria-label="More" data-d="1">+</button></div>
       </div>`).join("")}
     </div>
@@ -495,7 +624,7 @@ function pageBag() {
 }
 
 function needSignIn(message) {
-  app.innerHTML = `<section class="section first empty"><h2>Clock in first.</h2><p class="muted">${esc(message)}</p><button class="btn primary" id="need">Sign in</button></section>`;
+  app.innerHTML = `<section class="section first empty"><h2>Please sign in</h2><p class="muted">${esc(message)}</p><button class="btn primary" id="need">Sign in</button></section>`;
   document.getElementById("need").addEventListener("click", () => signInModal(message));
 }
 
@@ -534,10 +663,10 @@ async function pageCheckout() {
       <button class="btn primary wide" id="place">Place order</button>
     </form>
     <aside class="panel">
-      ${lines.map((l) => `<p class="row-between"><span>${esc(l.product.name)}${l.choice ? ` · ${esc(l.choice.name)}` : ""} · ${esc(l.size)} × ${l.quantity}</span><span>${money(l.quantity * l.product.price_inr)}</span></p>`).join("")}
+      ${lines.map((l) => `<p class="row-between"><span>${esc(l.product.name)}${l.choice ? ` · ${esc(l.choice.name)}` : ""} · ${esc(l.size === FREE_SIZE ? "Free size" : l.size)} × ${l.quantity}</span><span>${money(l.quantity * l.product.price_inr)}</span></p>`).join("")}
       <div id="pay-sum"></div>
       <ul class="assure">
-        <li>We confirm every payment before your tee is printed.</li>
+        <li>We confirm every payment before we prepare your order.</li>
         <li>If we decline a paid order, we refund your payment.</li>
         <li>Your details are only used to deliver this order. <a href="privacy.html">Privacy policy</a></li>
       </ul>
@@ -683,7 +812,7 @@ async function pagePay(orderId) {
       <p class="error" id="ref-error" hidden></p>
       <button class="btn primary wide" id="ref-send">Submit payment</button>
       <a class="gate-back" href="#/orders">I'll pay later</a>
-      <ul class="assure"><li>We check every payment before printing your tee.</li><li>If we decline your order, we refund your payment.</li></ul>
+      <ul class="assure"><li>We check every payment before we prepare your order.</li><li>If we decline your order, we refund your payment.</li></ul>
     </form>
   </section>`;
   document.getElementById("copy-upi").addEventListener("click", async () => {
@@ -715,7 +844,7 @@ async function pagePay(orderId) {
 function timeline(status) {
   const step = STATUS[status].step;
   if (step < 0) return "";
-  return `<ol class="track">${["Placed", "Accepted", "Printing", "Dispatched", "Delivered"].map((label, i) => `<li class="${i <= step ? "done" : ""}">${label}</li>`).join("")}</ol>`;
+  return `<ol class="track">${["Placed", "Accepted", "Preparing", "Dispatched", "Delivered"].map((label, i) => `<li class="${i <= step ? "done" : ""}">${label}</li>`).join("")}</ol>`;
 }
 
 function reviewForm(productId, name, existing) {
@@ -761,14 +890,14 @@ async function pageOrders() {
   if (location.hash !== openedAt) return;
   const mine = new Map(myReviews.map((r) => [r.product_id, r]));
   if (!orders.length) {
-    app.innerHTML = `<section class="section first empty"><h2>No orders yet.</h2><a class="btn primary" href="#/shop">Browse the drop</a></section>`;
+    app.innerHTML = `<section class="section first empty"><h2>No orders yet</h2><a class="btn primary" href="#/shop">Start shopping</a></section>`;
     return;
   }
   app.innerHTML = `<section class="section first"><div class="head"><h2>Your orders</h2></div>
     <div class="stack">${orders.map((o) => `<article class="panel order">
       <header class="row-between"><div><span class="mono">${esc(o.order_no)}</span><p class="muted small">${when(o.created_at)}</p></div><span class="status ${o.status}">${STATUS[o.status].label}</span></header>
       ${timeline(o.status)}
-      ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)}${i.color_name ? ` · ${esc(i.color_name)}` : ""} · ${esc(i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
+      ${o.order_items.map((i) => `<p class="row-between"><span>${esc(i.name)}${i.color_name ? ` · ${esc(i.color_name)}` : ""} · ${esc(i.size === FREE_SIZE ? "Free size" : i.size)} × ${i.quantity}</span><span>${money(i.unit_price_inr * i.quantity)}</span></p>
         ${o.status === "delivered" && i.product_id ? `<button class="btn small" data-review="${esc(i.product_id)}" data-name="${esc(i.name)}">${mine.has(i.product_id) ? `Edit your review (${mine.get(i.product_id).rating}★)` : "Write a review"}</button>` : ""}`).join("")}
       ${o.coupon_code ? `<p class="row-between small"><span>Coupon ${esc(o.coupon_code)}</span><span>-${money(o.coupon_discount_inr)}</span></p>` : ""}
       ${o.member_tier ? `<p class="row-between small"><span>${esc(o.member_tier)} member discount</span><span>-${money(o.member_discount_inr)}</span></p>` : ""}
@@ -802,11 +931,13 @@ async function pageOrders() {
 function faq() {
   const s = store.settings;
   const items = [
-    ["How do I pay?", hasUpi() && hasCod() ? "By UPI when you order, with a small advance, or in cash when your tee arrives." : hasUpi() ? "By UPI when you order. We confirm your payment before printing." : "Cash on delivery. You pay the delivery partner when your tee arrives, and there is nothing to pay online."],
+    ["How do I pay?", hasUpi() && hasCod() ? "By UPI when you order, with a small advance, or in cash when your parcel arrives." : hasUpi() ? "By UPI when you order. We confirm your payment before we prepare your order." : "Cash on delivery. You pay the delivery partner when your parcel arrives, and there is nothing to pay online."],
     ...(hasUpi() ? [["What if my order is declined after I pay?", "We refund your UPI payment."]] : []),
+    ["Are sarees free size?", "Yes. A saree drapes to fit every body, so there is no size to choose. Each product page lists the length and whether a blouse piece is included."],
+    ["Is a blouse piece included?", "It depends on the saree. Look for Blouse piece in the product details. When included, it comes unstitched so your tailor can fit it to you."],
     ["When is my tee printed?", "Each tee is printed after we accept your order, so it is made just for you."],
-    ["How do I choose my size?", "Open the Size guide on any product page and match your chest measurement. If you are between two sizes, choose the larger one for a relaxed fit."],
-    ["Can I cancel my order?", `Yes, from your orders page, until we accept it. After that printing begins${s.support_phone || s.support_email ? ", so please contact us quickly" : ""}.`],
+    ["How do I choose my tee size?", "Open the Size guide on any tee page and match your chest measurement. If you are between two sizes, choose the larger one for a relaxed fit."],
+    ["Can I cancel my order?", `Yes, from your orders page, until we accept it. After that we start preparing it${s.support_phone || s.support_email ? ", so please contact us quickly" : ""}.`],
     ["How do I follow my order?", "Sign in and open My orders. You will see each stage, and a tracking number once it is dispatched."],
     ["What does shipping cost?", `${shippingText()}.`],
     ["Why do I sign in with Google?", "So only you can see your orders. We receive your name, email and profile picture, and never your Google password."],
@@ -844,7 +975,7 @@ async function pageHelp() {
       <div class="panel"><div class="head"><h3>Send us a message</h3></div>${formOrPrompt}</div>
       <div><div class="head"><h3>Common questions</h3></div>${faq()}</div>
     </div>
-    ${s.business_address ? `<div class="panel seller"><span class="mono muted">Seller details</span><p><strong>AfterHours Streetwear Co.</strong><br>${esc(s.business_address)}</p></div>` : ""}
+    ${s.business_address ? `<div class="panel seller"><span class="mono muted">Seller details</span><p><strong>AfterHours</strong><br>${esc(s.business_address)}</p></div>` : ""}
   </section>`;
   document.getElementById("help-signin")?.addEventListener("click", () => signInModal("Sign in to send us a message."));
   const form = document.getElementById("help-form");
@@ -868,7 +999,7 @@ async function pageHelp() {
 }
 
 function notFound() {
-  app.innerHTML = `<section class="section first empty"><h2>Nothing out here.</h2><a class="btn primary" href="#/">Back home</a></section>`;
+  app.innerHTML = `<section class="section first empty"><h2>We couldn't find that page</h2><a class="btn primary" href="#/">Back home</a></section>`;
 }
 
 /* ---------- router ---------- */
@@ -878,7 +1009,9 @@ async function route() {
     window.scrollTo({ top: 0, behavior: "instant" });
     try {
       if (page === "") await pageHome();
-      else if (page === "shop") pageShop(decodeURIComponent(arg));
+      else if (page === "shop") pageShop("", decodeURIComponent(arg));
+      else if (page === "sarees") pageShop("saree", decodeURIComponent(arg));
+      else if (page === "tees") pageShop("tee", decodeURIComponent(arg));
       else if (page === "p") pageProduct(arg);
       else if (page === "bag") pageBag();
       else if (page === "checkout") await pageCheckout();

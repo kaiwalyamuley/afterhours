@@ -77,7 +77,7 @@ export const paidLater = (order) => (order.payment_method === "cod" ? order.tota
 export const STATUS = {
   pending: { label: "Awaiting confirmation", step: 0 },
   accepted: { label: "Accepted", step: 1 },
-  printing: { label: "Printing", step: 2 },
+  printing: { label: "Preparing", step: 2 },
   dispatched: { label: "Dispatched", step: 3 },
   delivered: { label: "Delivered", step: 4 },
   rejected: { label: "Declined", step: -1 },
@@ -112,4 +112,61 @@ export function tee(product, side = "back", eager = false, hex = "") {
   return `<div class="tee">${teeSvg(side, hex)}${art}</div>`;
 }
 
-export const colorTag = (name, hex, showHex = false) => (hex ? `<span class="color-tag"><i style="--c:${esc(hex)}"></i>${esc(name)}${showHex ? ` <code>${esc(hex)}</code>` : ""}</span>` : "");
+/* ---------- sarees ---------- */
+export const FREE_SIZE = "Free Size";
+export const isSaree = (product) => product?.category === "saree";
+export const SAREE_TYPES = ["Banarasi", "Kanjeevaram", "Paithani", "Chanderi", "Bandhani", "Patola", "Georgette", "Chiffon", "Cotton", "Linen", "Organza", "Printed"];
+export const SAREE_OCCASIONS = ["Wedding", "Festive", "Puja", "Party", "Office", "Daily wear"];
+export const SAREE_FABRICS = ["Pure silk", "Art silk", "Cotton", "Cotton silk", "Linen", "Georgette", "Chiffon", "Crepe", "Organza", "Net"];
+/** Saree facts in the order customers read them. */
+export const SAREE_FACTS = [
+  ["saree_type", "Saree type"], ["fabric", "Fabric"], ["occasion", "Occasion"], ["work", "Work"],
+  ["length_m", "Length"], ["blouse_piece", "Blouse piece"], ["care", "Care"],
+];
+export const factValue = (key, value) => {
+  if (key === "length_m") return value ? `${value} metres` : "";
+  if (key === "blouse_piece") return value === true ? "Included, unstitched" : value === false ? "Not included" : "";
+  return value || "";
+};
+/** "Size M" for tees, "Free size" for sarees. */
+export const sizeText = (size) => (size === FREE_SIZE ? "Free size" : `Size ${size}`);
+
+/** A folded saree with a zari border, used until the owner adds real photos. */
+export function sareeArt(hex = "#8C1C2B") {
+  const base = esc(hex || "#8C1C2B");
+  return `<svg class="saree-art" viewBox="0 0 600 700" aria-hidden="true">
+    <defs>
+      <linearGradient id="sareeSheen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
+      <pattern id="sareeButi" width="46" height="46" patternUnits="userSpaceOnUse"><path d="M23 13c5 4 5 11 0 15-5-4-5-11 0-15Z" fill="#E9C46A" fill-opacity=".55"/><circle cx="0" cy="0" r="2.4" fill="#E9C46A" fill-opacity=".5"/><circle cx="46" cy="46" r="2.4" fill="#E9C46A" fill-opacity=".5"/></pattern>
+      <pattern id="sareeZari" width="28" height="28" patternUnits="userSpaceOnUse"><rect width="28" height="28" fill="#C99A3B"/><path d="M0 14 14 0l14 14-14 14Z" fill="#E9C46A"/><circle cx="14" cy="14" r="3" fill="#8A6420"/></pattern>
+    </defs>
+    <g transform="translate(70 120)">
+      <path d="M20 330h420l20 60H0Z" fill="${base}" opacity=".55"/>
+      <rect x="0" y="390" width="460" height="70" rx="6" fill="${base}"/><rect x="0" y="390" width="460" height="70" rx="6" fill="url(#sareeSheen)"/>
+      <rect x="0" y="440" width="460" height="20" fill="url(#sareeZari)"/>
+      <rect x="20" y="210" width="420" height="120" rx="6" fill="${base}"/><rect x="20" y="210" width="420" height="120" rx="6" fill="url(#sareeButi)"/><rect x="20" y="210" width="420" height="120" rx="6" fill="url(#sareeSheen)"/>
+      <rect x="20" y="300" width="420" height="30" fill="url(#sareeZari)"/>
+      <rect x="40" y="60" width="380" height="150" rx="6" fill="${base}"/><rect x="40" y="60" width="380" height="150" rx="6" fill="url(#sareeButi)"/><rect x="40" y="60" width="380" height="150" rx="6" fill="url(#sareeSheen)"/>
+      <rect x="40" y="170" width="380" height="40" fill="url(#sareeZari)"/>
+      <path d="M40 60h380" stroke="#000" stroke-opacity=".15" stroke-width="3"/>
+    </g>
+  </svg>`;
+}
+
+/** First photo for a colour, then shared photos, else null. */
+export const photoOf = (product, color) => color?.images?.[0] || product?.colors?.[0]?.images?.[0] || product?.gallery?.[0] || product?.model_image || null;
+
+/** A product's picture: a photo when there is one, else the tee mockup or folded saree. */
+export function productArt(product, { side = "back", hex = "", eager = false, color = null } = {}) {
+  const pick = color || (product?.colors || []).find((c) => c.hex === hex) || product?.colors?.[0] || null;
+  if (isSaree(product)) {
+    const src = photoOf(product, pick);
+    return src ? `<img class="photo" src="${esc(src)}" alt="" loading="${eager ? "eager" : "lazy"}">` : sareeArt(hex || pick?.hex);
+  }
+  return tee(product, side, eager, hex || pick?.hex || "");
+}
+
+/** The AfterHours wordmark, set in type so it reads on light and dark backgrounds. */
+export const wordmark = (extra = "") => `<span class="wordmark ${extra}"><i aria-hidden="true">✦</i>After<b>Hours</b></span>`;
+
+export const colorTag =(name, hex, showHex = false) => (hex ? `<span class="color-tag"><i style="--c:${esc(hex)}"></i>${esc(name)}${showHex ? ` <code>${esc(hex)}</code>` : ""}</span>` : "");

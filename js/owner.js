@@ -1,5 +1,5 @@
 import { api } from "./api.js";
-import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART } from "./ui.js";
+import { esc, money, when, toast, openModal, pickReason, tee, colorTag, STATUS, PAYMENT, paidLater, DEFAULT_SIZE_CHART, productArt, sizeText } from "./ui.js";
 import { OWNER_REASONS } from "./reasons.js";
 import { drawAnalytics, drawMargin } from "./analytics.js";
 import { drawProducts } from "./products-manager.js";
@@ -19,7 +19,7 @@ const GROUPS = [
 ];
 const NEXT = {
   pending: [["accepted", "Accept order", "primary"], ["rejected", "Decline", ""]],
-  accepted: [["printing", "Send to print", "primary"], ["rejected", "Decline", ""]],
+  accepted: [["printing", "Start printing or packing", "primary"], ["rejected", "Decline", ""]],
   printing: [["dispatched", "Mark dispatched by hand", ""]],
   dispatched: [["delivered", "Mark delivered", "primary"]],
 };
@@ -48,7 +48,14 @@ function paymentBox(order) {
   </div>`;
 }
 
-function orderCard(order) {
+/** A saree shows its current photo; a tee shows the print it was ordered with. */
+function itemArt(item, products) {
+  const product = products.find((p) => p.id === item.product_id);
+  if (product?.category === "saree") return productArt(product, { hex: item.color_hex });
+  return tee(item, "back", false, item.color_hex);
+}
+
+function orderCard(order, products = []) {
   const digits = order.phone.replace(/\D/g, "").slice(-10);
   return `<article class="panel order">
     <header class="row-between">
@@ -56,8 +63,8 @@ function orderCard(order) {
       <span class="status ${order.status}">${STATUS[order.status].label}</span>
     </header>
     ${order.order_items.map((item) => `<div class="line slim">
-      <div class="thumb">${tee(item, "back", false, item.color_hex)}</div>
-      <div class="grow"><h3>${esc(item.name)}</h3><p class="mono muted">Size ${esc(item.size)} × ${item.quantity}</p>
+      <div class="thumb">${itemArt(item, products)}</div>
+      <div class="grow"><h3>${esc(item.name)}</h3><p class="mono muted">${esc(sizeText(item.size))} × ${item.quantity}</p>
         ${colorTag(item.color_name, item.color_hex, true)}
         <div class="files">${fileLink(item.print_file_back, "Back print")}${fileLink(item.print_file_front, "Front print")}</div></div>
       <span>${money(item.unit_price_inr * item.quantity)}</span>
@@ -145,7 +152,7 @@ function drawOrders(body, orders, ctx) {
     const count = orders.filter((o) => statuses.includes(o.status)).length;
     return `<button class="chip ${key === orderTab ? "on" : ""}" data-tab="${key}">${label} ${count}</button>`;
   }).join("")}<button class="chip" id="reload">Refresh</button></div>
-  <div class="orders">${shown.map(orderCard).join("") || '<p class="muted">No orders here.</p>'}</div>`;
+  <div class="orders">${shown.map((o) => orderCard(o, ctx.store.products)).join("") || '<p class="muted">No orders here.</p>'}</div>`;
   body.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => {
     orderTab = b.dataset.tab;
     drawOrders(body, orders, ctx);

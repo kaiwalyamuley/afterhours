@@ -1,6 +1,6 @@
 // Products tab: drop designs to publish them, and a spreadsheet-style list for names and prices.
 import { api } from "./api.js";
-import { esc, money, toast, openModal, tee } from "./ui.js";
+import { esc, money, toast, openModal, tee, productArt } from "./ui.js";
 import { withDefaults, unitEconomics, suggestPrices } from "./margin.js";
 import { productForm, usableFiles, asItem, bindDrop, segments, slugify, GRAPHIC_TYPES, QUICK_COLORS } from "./product-form.js";
 
@@ -18,7 +18,8 @@ function drawQuickPublish(area, ctx, economics) {
   const products = ctx.store.products;
   const newest = products[products.length - 1];
   const suggested = economics ? suggestPrices(economics.costs, economics.shop).suggested?.price : null;
-  const state = { drafts: [], price: newest?.price_inr || suggested || 899, collection: newest?.collection || "", gender: "unisex", colors: new Set(["#000000"]), busy: false };
+  const lastTee = [...products].reverse().find((p) => (p.category || "tee") === "tee");
+  const state = { drafts: [], price: lastTee?.price_inr || suggested || 899, collection: lastTee?.collection || "", gender: "unisex", colors: new Set(["#000000"]), busy: false };
 
   const addFiles = (files) => {
     state.drafts.push(...usableFiles(files, GRAPHIC_TYPES, MAX_DRAFTS - state.drafts.length).map((file) => ({ ...asItem(file), name: nameFromFile(file) })));
@@ -49,7 +50,7 @@ function drawQuickPublish(area, ctx, economics) {
         sort += 10;
         await api.saveProduct({
           name: draft.name.trim(), tagline: "", description: "", slug, sort, status: "live", price_inr: price, compare_at_inr: null,
-          collection: state.collection.trim(), gender: state.gender, sizes: DEFAULT_SIZES, gallery: [], model_image: null,
+          collection: state.collection.trim(), gender: state.gender, sizes: DEFAULT_SIZES, gallery: [], model_image: null, category: "tee", details: {},
           print_back: draft.src, print_file_back: draft.src,
           colors: QUICK_COLORS.filter(([, hex]) => state.colors.has(hex)).map(([name, hex]) => ({ name, hex, images: [] })),
         });
@@ -70,7 +71,7 @@ function drawQuickPublish(area, ctx, economics) {
   const draw = () => {
     if (!state.drafts.length) {
       area.innerHTML = `<label class="qp-drop" id="qp-drop"><input type="file" multiple accept="${GRAPHIC_TYPES.join(",")}" hidden>
-        <b>+</b><span><strong>Drop your designs here to publish</strong><small class="muted">Each image becomes a tee. You can select many at once.</small></span></label>`;
+        <b>+</b><span><strong>Drop tee designs here to publish</strong><small class="muted">Each image becomes a custom tee. You can select many at once. Use Add a saree for sarees.</small></span></label>`;
       area.querySelector("input").addEventListener("change", (event) => addFiles([...event.target.files]));
       bindDrop(area.querySelector("#qp-drop"), addFiles);
       return;
@@ -127,12 +128,14 @@ export async function drawProducts(body, ctx) {
   const products = ctx.store.products;
   const selected = new Set();
   let search = "";
+  let kind = "all";
 
   body.innerHTML = `<div id="qp-area"></div>
     <div class="row-between toolbar pm-tools">
       <input id="pm-search" type="search" placeholder="Search ${products.length} products" aria-label="Search products">
-      <button class="btn small" id="new">Add with full details</button>
+      <div class="row"><button class="btn small primary" id="new-saree">Add a saree</button><button class="btn small" id="new">Add a tee with full details</button></div>
     </div>
+    <div class="chips" id="pm-kinds">${[["all", "All"], ["saree", "Sarees"], ["tee", "Custom tees"]].map(([v, l]) => `<button class="chip ${v === kind ? "on" : ""}" data-kind="${v}">${l}</button>`).join("")}</div>
     <div id="pm-list"></div>
     <div class="pm-bulk" id="pm-bulk" hidden></div>`;
   drawQuickPublish(body.querySelector("#qp-area"), ctx, economics);
@@ -236,13 +239,13 @@ export async function drawProducts(body, ctx) {
 
   const drawList = () => {
     const needle = search.trim().toLowerCase();
-    const shown = [...products].reverse().filter((p) => !needle || `${p.name} ${p.collection}`.toLowerCase().includes(needle));
+    const shown = [...products].reverse().filter((p) => (kind === "all" || (p.category || "tee") === kind) && (!needle || `${p.name} ${p.collection}`.toLowerCase().includes(needle)));
     const list = body.querySelector("#pm-list");
     list.innerHTML = shown.length ? `<div class="pm-head"><label class="pm-check"><input type="checkbox" id="pm-all" aria-label="Select all shown" ${shown.every((p) => selected.has(p.id)) ? "checked" : ""}></label><span>Product</span><span>Price</span><span>Was</span><span>Visibility</span><span></span></div>
       ${shown.map((p) => `<div class="pm-row" data-id="${esc(p.id)}">
         <label class="pm-check"><input type="checkbox" data-pick aria-label="Select ${esc(p.name)}" ${selected.has(p.id) ? "checked" : ""}></label>
-        <div class="pm-main"><div class="thumb">${p.colors?.[0]?.images?.[0] ? `<img src="${esc(p.colors[0].images[0])}" alt="">` : tee(p, "back", false, p.colors?.[0]?.hex)}</div>
-          <div class="pm-text"><input class="pm-name" maxlength="80" aria-label="Name" value="${esc(p.name)}"><input class="pm-collection" maxlength="40" aria-label="Collection of ${esc(p.name)}" value="${esc(p.collection)}"></div></div>
+        <div class="pm-main"><div class="thumb">${p.colors?.[0]?.images?.[0] ? `<img src="${esc(p.colors[0].images[0])}" alt="">` : productArt(p)}</div>
+          <div class="pm-text"><span class="pm-kind ${p.category === "saree" ? "saree" : ""}">${p.category === "saree" ? "Saree" : "Tee"}</span><input class="pm-name" maxlength="80" aria-label="Name" value="${esc(p.name)}"><input class="pm-collection" maxlength="40" aria-label="Collection of ${esc(p.name)}" value="${esc(p.collection)}"></div></div>
         <div class="pm-price"><label class="inline">₹<input class="price-input" type="number" inputmode="numeric" min="1" step="1" aria-label="Price of ${esc(p.name)}" value="${p.price_inr}"></label><small data-profit>${profitText(p, p.price_inr)}</small></div>
         <label class="inline pm-was">₹<input class="was-input" type="number" inputmode="numeric" min="1" step="1" aria-label="Original price of ${esc(p.name)}" placeholder="None" value="${p.compare_at_inr ?? ""}"></label>
         <select class="status-input" aria-label="Visibility of ${esc(p.name)}">${STATUSES.map(([v, l]) => `<option value="${v}" ${p.status === v ? "selected" : ""}>${l}</option>`).join("")}</select>
@@ -308,7 +311,13 @@ export async function drawProducts(body, ctx) {
     });
   };
 
-  body.querySelector("#new").addEventListener("click", () => productForm(null, ctx));
+  body.querySelector("#new").addEventListener("click", () => productForm(null, ctx, "tee"));
+  body.querySelector("#new-saree").addEventListener("click", () => productForm(null, ctx, "saree"));
+  body.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => {
+    kind = b.dataset.kind;
+    body.querySelectorAll("[data-kind]").forEach((x) => x.classList.toggle("on", x === b));
+    drawList();
+  }));
   body.querySelector("#pm-search").addEventListener("input", (event) => {
     search = event.target.value;
     drawList();

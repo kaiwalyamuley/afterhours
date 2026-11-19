@@ -1,11 +1,11 @@
 // Animation helpers shared by the customer store and the owner console.
-import { esc } from "./ui.js";
+import { esc, wordmark } from "./ui.js";
 
 export const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /* ---------- scroll reveal ---------- */
-const REVEAL = ".head, .card, .tier, .steps li, .line, .panel, .stat, .prow, .chips, .tabs";
+const REVEAL = ".head, .card, .cat, .tier, .steps li, .line, .panel, .stat, .prow, .chips, .tabs";
 let observer;
 
 export function reveal(root) {
@@ -205,9 +205,9 @@ export function playLogin({ name, owner = false, title = "OWNER ACCESS" }) {
   screen.className = `punch ${owner ? "owner" : ""}`;
   screen.setAttribute("aria-hidden", "true");
   screen.innerHTML = `<div class="punch-scan"></div>
-    <img class="punch-logo" src="assets/brand/logo.webp" alt="">
-    <div class="punch-card mono"><span>${owner ? esc(title) : "TIME CARD"}</span><b>${esc(time)}</b></div>
-    <div class="punch-stamp">${owner ? "Access granted" : "Clocked in"}</div>
+    ${wordmark("punch-logo")}
+    <div class="punch-card mono"><span>${owner ? esc(title) : "Signed in"}</span><b>${esc(time)}</b></div>
+    <div class="punch-stamp">${owner ? "Access granted" : "Welcome"}</div>
     <p class="punch-name">${esc(name)}</p>`;
   document.body.append(screen);
   const finish = () => {

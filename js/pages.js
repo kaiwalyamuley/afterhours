@@ -61,9 +61,9 @@ export function drawPages(body, ctx) {
       <section class="panel pg-card">
         <h3>Top of the page</h3>
         ${field("kicker", "Small line above the headline", layout.hero.kicker, 60)}
-        <div class="cols">${field("line1", "Headline", layout.hero.line1, 30)}${field("line2", "Headline, orange line", layout.hero.line2, 30)}</div>
+        <div class="cols">${field("line1", "Headline", layout.hero.line1, 30)}${field("line2", "Headline, highlighted line", layout.hero.line2, 30)}</div>
         ${field("text", "Text under the headline", layout.hero.text, 180, true)}
-        <label class="field"><span>Featured tee</span><select data-hero="product"><option value="">Newest tee</option>${ctx.store.products.filter((p) => p.status !== "hidden").map((p) => `<option value="${esc(p.slug)}" ${p.slug === layout.hero.product ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+        <label class="field"><span>Featured product</span><select data-hero="product"><option value="">Newest product</option>${ctx.store.products.filter((p) => p.status !== "hidden").map((p) => `<option value="${esc(p.slug)}" ${p.slug === layout.hero.product ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
       </section>
       <section class="panel pg-card">
         <h3>Sections</h3>
@@ -124,7 +124,7 @@ export function drawPages(body, ctx) {
       <section class="panel pg-card">
         <h3>Seller and policy</h3>
         ${area("business_address", "Business address", "Shown on the Help page and footer", 2, 300)}
-        ${area("return_policy", "Return and exchange policy", "Example: Damaged or wrongly printed tees are replaced if you contact us within 3 days of delivery.", 4, 1200)}
+        ${area("return_policy", "Return and exchange policy", "Example: Damaged sarees or wrongly printed tees are replaced if you contact us within 3 days of delivery.", 4, 1200)}
       </section>`;
     editor.querySelectorAll("[data-help]").forEach((input) => input.addEventListener("change", () => {
       const name = input.dataset.help;
