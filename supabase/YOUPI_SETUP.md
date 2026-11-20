@@ -27,6 +27,7 @@ reference form, so nothing breaks.
 - Edge functions `youpi-create` (sign-in required) and `youpi-webhook` (checks the HMAC
   signature) are deployed. Their source is in this folder.
 - Store: the pay page button, the owner panel switch and a gateway note on each order.
+- Installers in [`gateway/`](../gateway) that set up the gateway on your own PC.
 
 ## What you need to do
 
@@ -34,65 +35,63 @@ reference form, so nothing breaks.
 The YOUPI PG repository has no LICENSE file and its `package.json` says `"Commercial"`.
 Get written permission from the maintainers (Zenuxs) before you use it for real orders.
 
-### 2. A server for the gateway
-GitHub Pages cannot run it. Use an always-on Linux machine with **Node 24.22.1 or newer**,
-reachable over HTTPS (for example `pay.wearafterhours.store` through a Cloudflare Tunnel).
+### 2. Put wearafterhours.store's DNS on Cloudflare (free)
+The tunnel needs Cloudflare to manage the domain's DNS. If it doesn't yet, add the site at
+dash.cloudflare.com, copy your existing records (the GitHub Pages ones for the store), and
+switch the nameservers at your domain registrar. The store keeps working on GitHub Pages.
 
+### 3. Run the installer on the PC that will stay on
+Download the `gateway` folder of this repository to that PC, then run:
+
+**Windows** (PowerShell, not as administrator):
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup-windows.ps1 -UpiId yourbrand@okaxis
+```
+
+**Linux** (Ubuntu or Debian with systemd):
 ```bash
-git clone https://github.com/youpi-pg/YouPI-PG.git youpi-pg && cd youpi-pg
-npm install && cp .env.example .env
+bash setup-linux.sh yourbrand@okaxis
 ```
 
-Set these in the gateway's `.env`:
+The installer:
+- installs Node.js 24, Git and `cloudflared` if they are missing;
+- downloads YOUPI PG at the tested version into `youpi-pg` in your home folder;
+- writes the AfterHours settings into its `.env`;
+- asks you to sign in to Cloudflare once, then creates a tunnel with three addresses:
+  `pay.wearafterhours.store` (checkout), `pay-api.wearafterhours.store` (used by the
+  Android observer) and `pay-gmail.wearafterhours.store` (Gmail sign-in). The admin panel
+  stays private on the PC;
+- starts the gateway and tunnel now and after every restart;
+- connects the gateway to the store (store name, UPI ID, webhook, new secret and key) and
+  prints the four values Supabase needs. They are also saved to
+  `youpi-pg/afterhours-secrets.txt`.
 
-```ini
-CHECKOUT_PUBLIC_URL=https://pay.wearafterhours.store
-YOUPI_ALLOWED_ORIGINS=https://wearafterhours.store
-YOUPI_ALLOWED_RETURN_ORIGINS=https://wearafterhours.store
-DEFAULT_APP_NAME="AfterHours"
-DEFAULT_PAYEE_VPA=your-upi-id@bank
-DEFAULT_HIDE_POWERED_BY=true
-ANDROID_ENROLLMENT_SECRET=<new random 64-hex value>
-```
+It is safe to run again. Keep the PC on and set it never to sleep.
 
-Generate random values with
-`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
-Start it with `npm start`. Point the public address at the checkout portal (port 7000)
-only: it serves the QR pages and forwards `/api/*` to the payment API itself. Keep the
-admin panel (6001), control center (8090) and payment API port (6100) private, and back up
-`data/`. The admin API is reachable through `/api/v1/admin/*` but needs the admin token
-in `data/.secrets/admin_api_token`, so keep that file secret.
+### 4. Add the Supabase secrets
+In Supabase, go to Edge Functions → Secrets and add the four values the installer printed:
+`YOUPI_API_URL`, `YOUPI_MERCHANT_ID`, `YOUPI_MERCHANT_KEY`, `YOUPI_WEBHOOK_SECRET`.
+Then delete `afterhours-secrets.txt`.
 
-### 3. Connect an observer
-In the gateway admin panel, pair the Android observer app on a spare phone that has your
-bank SIM (check the APK's SHA-256 against the README first), or connect Gmail. The gateway
-refuses new UPI sessions until an observer is online; the store then falls back to the
-manual form.
-
-### 4. Point the gateway at the store, in this order
-In the gateway admin panel, for your merchant:
-
-1. Set the webhook URL to
-   `https://qrcatzvlfitidakbsujy.supabase.co/functions/v1/youpi-webhook`.
-2. Rotate the **webhook secret** and copy it.
-3. **Then** rotate the **merchant API key** and copy it. Changing the webhook secret
-   resets the API key, so the key must come last.
-4. Copy the merchant ID.
-
-### 5. Add the Supabase secrets
-In Supabase, go to Edge Functions → Secrets and add:
-
-| Name | Value |
-| --- | --- |
-| `YOUPI_API_URL` | your public payment API address, e.g. `https://pay.wearafterhours.store` |
-| `YOUPI_MERCHANT_ID` | merchant ID from step 4 |
-| `YOUPI_MERCHANT_KEY` | merchant API key from step 4 |
-| `YOUPI_WEBHOOK_SECRET` | webhook secret from step 4 |
+### 5. Connect an observer
+On the PC, open `http://localhost:6001` and pair the Android observer app on a spare phone
+that has your bank SIM (check the APK's SHA-256 against the YOUPI README first), or connect
+Gmail. The gateway refuses new UPI sessions until an observer is online; the store then
+falls back to the manual form.
 
 ### 6. Switch it on
-Owner panel → Store info → Payments → tick **Detect UPI payments automatically** → Save.
+Check that `https://pay.wearafterhours.store/health` shows `UP`. Then go to the owner panel
+→ Store info → Payments, tick **Detect UPI payments automatically** and save.
 
 ### 7. Test before customers use it
 Place a small UPI order yourself and pay it. The order should move to
 **Payment being checked** with the UTR filled in and a gateway note. The YOUPI project
 suggests staying under about 20 payments a day per receiving account while you trial it.
+
+## Doing it by hand instead
+
+If you set the gateway up yourself, note that **changing the webhook secret resets the
+merchant API key**, so create the secret first and the key last.
+`gateway/connect-afterhours.mjs` does this in the right order, and can be run on its own
+from inside the `youpi-pg` folder: `node connect-afterhours.mjs env --upi yourid@bank`,
+then, with the gateway running, `node connect-afterhours.mjs connect --upi yourid@bank`.
