@@ -129,6 +129,12 @@ async function liveApi() {
     async shipBook(orderId, courierId, pickup) {
       return callShipping({ action: "book", order_id: orderId, courier_id: courierId, pickup });
     },
+    async startGatewayPayment(orderId) {
+      const { data, error } = await db.functions.invoke("youpi-create", { body: { order_id: orderId } });
+      if (!error && data?.checkout_url) return data.checkout_url;
+      const details = await error?.context?.json?.().catch(() => null);
+      throw new Error(details?.error || "Could not start the payment. Please pay by UPI ID below.");
+    },
     async submitPaymentRef(orderId, ref) {
       unwrap(await db.rpc("submit_payment_ref", { p_order_id: orderId, p_ref: ref }));
     },

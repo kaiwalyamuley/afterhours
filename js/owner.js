@@ -29,6 +29,15 @@ let orderTab = "new";
 
 const fileLink = (href, label) => (href ? `<a class="file" href="${esc(href)}" download target="_blank" rel="noopener">${label}</a>` : "");
 
+// What the UPI gateway reported. An alert is not proof of settlement, so the owner still confirms.
+const GATEWAY_NOTE = {
+  OBSERVED_SUCCESS: "Gateway saw a bank alert for this amount. Check your bank before confirming.",
+  RECONCILED: "Gateway matched this payment to your bank statement.",
+  MANUAL_REVIEW: "Gateway could not tell which order this payment belongs to. Check your bank by hand.",
+  AMOUNT_MISMATCH: "Gateway saw a payment of a different amount. Check your bank by hand.",
+  DUPLICATE_UTR: "Gateway saw a reference already used on another order. Check your bank by hand.",
+};
+
 const canAccept = (order) => ["cod", "verified"].includes(order.payment_status);
 
 function paymentBox(order) {
@@ -44,6 +53,7 @@ function paymentBox(order) {
     <div class="row-between"><span>${methods[order.payment_method]}</span><span class="pay-state ${esc(order.payment_status)}">${PAYMENT[order.payment_status]}</span></div>
     ${order.amount_due_now ? `<p class="small">UPI: <strong>${money(order.amount_due_now)}</strong>${order.upi_ref ? ` · Ref <code>${esc(order.upi_ref)}</code>` : ""}</p>` : ""}
     ${later && !["rejected", "cancelled"].includes(order.status) ? `<p class="small">Collect at delivery: <strong>${money(later)}</strong></p>` : ""}
+    ${GATEWAY_NOTE[order.gateway_state] ? `<p class="${order.gateway_state === "OBSERVED_SUCCESS" || order.gateway_state === "RECONCILED" ? "muted" : "reason-note"} small">${GATEWAY_NOTE[order.gateway_state]}</p>` : ""}
     ${actions[order.payment_status] || ""}
     ${order.status === "pending" && !canAccept(order) ? '<p class="muted small">You can accept this order once the payment is confirmed.</p>' : ""}
   </div>`;
@@ -225,7 +235,8 @@ function drawSettings(body, ctx) {
       <label class="field"><span>Advance amount (₹)</span><input name="advance_inr" type="number" min="1" step="1" required value="${s.advance_inr ?? 99}"></label>
       <label class="field"><span>Discount for paying in full (%)</span><input name="prepaid_discount_pct" type="number" min="0" max="50" step="1" required value="${s.prepaid_discount_pct ?? 0}"></label>
     </div>
-    <label class="check"><input type="checkbox" name="cod_enabled" ${s.cod_enabled !== false ? "checked" : ""}><span><strong>Offer full cash on delivery</strong><small class="muted">Turn off to require full or advance UPI payment. Needs a UPI ID.</small></span></label>
+    <label class="check"><input type="checkbox" name="upi_gateway_on" ${s.upi_gateway_on ? "checked" : ""}><span><strong>Detect UPI payments automatically</strong><small class="muted">Uses your self-hosted YOUPI PG gateway. Switch on only once the gateway is running and its secrets are in Supabase. You still confirm each payment.</small></span></label>
+    <label class="check"><input type="checkbox" name="cod_enabled"${s.cod_enabled !== false ? "checked" : ""}><span><strong>Offer full cash on delivery</strong><small class="muted">Turn off to require full or advance UPI payment. Needs a UPI ID.</small></span></label>
     <label class="field"><span>Cash on delivery fee (₹)</span><input name="cod_fee_inr" type="number" min="0" max="1000" step="1" required value="${s.cod_fee_inr ?? 0}"><small class="muted">Added to full cash on delivery orders to cover your courier's COD charge. Use 0 for no fee. UPI and advance orders never pay it.</small></label>
     <h3>Size chart</h3>
     <p class="muted small">Replace these with real measurements from your blank tees, in inches.</p>
@@ -275,6 +286,7 @@ function drawSettings(body, ctx) {
         size_chart: sizeChart,
         upi_payee: values.upi_payee || "AfterHours",
         cod_enabled: Boolean(data.cod_enabled),
+        upi_gateway_on: Boolean(data.upi_gateway_on) && Boolean(upi),
         parcel_weight_kg: Number(data.parcel_weight_kg),
         parcel_length_cm: Number(data.parcel_length_cm),
         parcel_breadth_cm: Number(data.parcel_breadth_cm),

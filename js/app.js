@@ -975,6 +975,9 @@ async function pagePay(orderId) {
       <span class="mono kicker">Order ${esc(order.order_no)}</span>
       <p class="pay-amount">${money(order.amount_due_now)}</p>
       ${order.payment_status === "failed" ? '<p class="error">We could not find your last payment. Please pay again, or contact us if money left your account.</p>' : ""}
+      ${s.upi_gateway_on ? `<button type="button" class="btn primary wide" id="gateway-pay">Pay with any UPI app</button>
+      <p class="muted small">We detect your payment automatically, so there's no reference number to type. Or pay using the details below.</p>
+      <p class="error" id="gateway-error" hidden></p>` : ""}
       ${s.upi_qr_url ? `<div class="qr"><img src="${esc(s.upi_qr_url)}" alt="UPI QR code for AfterHours"></div>` : '<p class="muted">Open any UPI app, choose <strong>Pay to UPI ID</strong>, and paste the ID below.</p>'}
       <p class="pay-exact">${s.upi_qr_url ? "Scan, then enter" : "Enter"} exactly <strong>${money(order.amount_due_now)}</strong></p>
       <p class="muted small">Add ${esc(order.order_no)} in the payment note if your app allows it.</p>
@@ -990,6 +993,19 @@ async function pagePay(orderId) {
       <ul class="assure"><li>We check every payment before we prepare your order.</li><li>If we decline your order, we refund your payment.</li></ul>
     </form>
   </section>`;
+  document.getElementById("gateway-pay")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const box = document.getElementById("gateway-error");
+    box.hidden = true;
+    button.disabled = true;
+    try {
+      location.href = await api.startGatewayPayment(order.id);
+    } catch (error) {
+      box.textContent = error.message;
+      box.hidden = false;
+      button.disabled = false;
+    }
+  });
   document.getElementById("copy-upi").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(s.upi_id);
